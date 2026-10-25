@@ -1,77 +1,61 @@
+using ListeCourses.Components;
 using ListeCourses.Data;
 using ListeCourses.Models;
+using ListeCourses.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Injection de dépendances : on déclare le DbContext une fois, ASP.NET Core
-// le fournit ensuite automatiquement à chaque endpoint qui le demande.
+// Injection de dépendances : on déclare les services une fois, ASP.NET Core
+// les fournit ensuite automatiquement à qui les demande (API ou composants).
 // Pour passer à SQL Server : package Microsoft.EntityFrameworkCore.SqlServer
 // puis options.UseSqlServer(...) avec la chaîne "SqlServer" de appsettings.json.
-builder.Services.AddDbContext<CoursesDbContext>(options =>
+builder.Services.AddDbContextFactory<CoursesDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Courses")));
+builder.Services.AddSingleton<ArticleService>();
+
+// Blazor en mode "Interactive Server" : le C# tourne sur le serveur et
+// l'affichage est mis à jour dans le navigateur via une connexion SignalR.
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents();
 
 var app = builder.Build();
 
 // Crée la base et la table si elles n'existent pas encore.
-using (var scope = app.Services.CreateScope())
+using (var db = app.Services.GetRequiredService<IDbContextFactory<CoursesDbContext>>().CreateDbContext())
 {
-    scope.ServiceProvider.GetRequiredService<CoursesDbContext>().Database.EnsureCreated();
+    db.Database.EnsureCreated();
 }
 
-// Sert wwwroot/index.html (l'interface).
-app.UseDefaultFiles();
 app.UseStaticFiles();
+app.UseAntiforgery();
 
 // ----- API REST -----
 var api = app.MapGroup("/api/articles");
 
-// SELECT * FROM Articles ORDER BY Achete, Rayon, Nom
-api.MapGet("/", async (CoursesDbContext db) =>
-    await db.Articles
-        .OrderBy(a => a.Achete)
-        .ThenBy(a => a.Rayon)
-        .ThenBy(a => a.Nom)
-        .ToListAsync());
+api.MapGet("/", (ArticleService service) => service.ListerAsync());
 
-// INSERT INTO Articles ...
-api.MapPost("/", async (Article article, CoursesDbContext db) =>
+api.MapPost("/", async (Article article, ArticleService service) =>
+    await service.AjouterAsync(article) is { } nouvel
+        ? Results.Created($"/api/articles/{nouvel.Id}", nouvel)
+        : Results.BadRequest("Le nom est obligatoire."));
+
+api.MapPatch("/{id:int}/basculer", async (int id, ArticleService service) =>
+    await service.BasculerAsync(id) is { } article
+        ? Results.Ok(article)
+        : Results.NotFound());
+
+api.MapDelete("/{id:int}", async (int id, ArticleService service) =>
+    await service.SupprimerAsync(id) ? Results.NoContent() : Results.NotFound());
+
+api.MapDelete("/achetes", async (ArticleService service) =>
 {
-    if (string.IsNullOrWhiteSpace(article.Nom))
-        return Results.BadRequest("Le nom est obligatoire.");
-
-    article.Id = 0;
-    article.Nom = article.Nom.Trim();
-    article.Quantite = Math.Max(1, article.Quantite);
-    article.DateAjout = DateTime.UtcNow;
-    db.Articles.Add(article);
-    await db.SaveChangesAsync();
-    return Results.Created($"/api/articles/{article.Id}", article);
-});
-
-// UPDATE Articles SET Achete = ~Achete WHERE Id = @id
-api.MapPatch("/{id:int}/basculer", async (int id, CoursesDbContext db) =>
-{
-    var article = await db.Articles.FindAsync(id);
-    if (article is null) return Results.NotFound();
-
-    article.Achete = !article.Achete;
-    await db.SaveChangesAsync();
-    return Results.Ok(article);
-});
-
-// DELETE FROM Articles WHERE Id = @id
-api.MapDelete("/{id:int}", async (int id, CoursesDbContext db) =>
-{
-    var nb = await db.Articles.Where(a => a.Id == id).ExecuteDeleteAsync();
-    return nb == 0 ? Results.NotFound() : Results.NoContent();
-});
-
-// DELETE FROM Articles WHERE Achete = 1
-api.MapDelete("/achetes", async (CoursesDbContext db) =>
-{
-    await db.Articles.Where(a => a.Achete).ExecuteDeleteAsync();
+    await service.SupprimerAchetesAsync();
     return Results.NoContent();
 });
+
+// ----- Interface Blazor -----
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode();
 
 app.Run();

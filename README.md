@@ -3,6 +3,10 @@
 Petite application web pour apprendre .NET : ajouter des articles, les cocher
 quand ils sont achetés, les supprimer.
 
+Deux interfaces utilisent les mêmes données :
+- **Blazor** (page d'accueil `/`) : l'interface est écrite en C# ;
+- **JavaScript** (`/classique.html`) : HTML + JavaScript qui appelle l'API REST.
+
 ## Lancer l'application
 
 Prérequis : [SDK .NET 8](https://dotnet.microsoft.com/download).
@@ -20,8 +24,11 @@ La base SQLite `courses.db` est créée automatiquement au premier lancement.
 |---|---|---|
 | `Models/Article.cs` | L'entité `Article` | Fichier de l'analyse / table |
 | `Data/CoursesDbContext.cs` | Accès à la base (EF Core) | `HOuvreConnexion` + analyse |
-| `Program.cs` | Configuration + API REST | Procédures / webservice |
-| `wwwroot/index.html` | Interface (HTML + JavaScript) | Fenêtre / page WEBDEV |
+| `Services/ArticleService.cs` | Logique métier partagée (API + Blazor) | Collection de procédures globales |
+| `Program.cs` | Configuration + API REST | Code du projet / webservice |
+| `Components/Pages/Accueil.razor` | Interface Blazor (HTML + C#) | Fenêtre / page WEBDEV |
+| `Components/App.razor`, `Routes.razor` | Squelette HTML et routage Blazor | Projet / modèle de pages |
+| `wwwroot/classique.html` | Interface HTML + JavaScript | Page WEBDEV avec code navigateur |
 
 ## API
 

@@ -1,0 +1,96 @@
+@page "/"
+@inject ArticleService Service
+
+@* Un composant Razor = du HTML + du C#. C'est l'équivalent d'une fenêtre
+   WinDev : les champs (HTML) et le code des événements (@code plus bas). *@
+
+<PageTitle>Liste de courses</PageTitle>
+
+<h1>🛒 Liste de courses</h1>
+
+<form class="ajout" @onsubmit="Ajouter">
+    <input class="nom-saisie" placeholder="Article (ex. : pain)" maxlength="100" autocomplete="off"
+           @bind="nouvel.Nom" />
+    <input class="quantite" type="number" min="1" aria-label="Quantité" @bind="nouvel.Quantite" />
+    <input class="rayon-saisie" placeholder="Rayon" maxlength="50" @bind="nouvel.Rayon" />
+    <button class="principal" type="submit">Ajouter</button>
+</form>
+
+@if (erreur is not null)
+{
+    <p class="erreur">@erreur</p>
+}
+
+@if (articles is null)
+{
+    <p class="vide">Chargement…</p>
+}
+else
+{
+    <ul>
+        @if (articles.Count == 0)
+        {
+            <li class="vide">La liste est vide.</li>
+        }
+        @foreach (var a in articles)
+        {
+            <li @key="a.Id" class="@(a.Achete ? "achete" : null)">
+                <input type="checkbox" checked="@a.Achete" @onchange="() => Basculer(a.Id)" />
+                <span class="nom">@a.Nom@(a.Quantite > 1 ? $" × {a.Quantite}" : "")</span>
+                <span class="rayon">@a.Rayon</span>
+                <button class="suppr" title="Supprimer" @onclick="() => Supprimer(a.Id)">✕</button>
+            </li>
+        }
+    </ul>
+
+    <footer>
+        <span>@Restants article@(Restants > 1 ? "s" : "") restant@(Restants > 1 ? "s" : "")</span>
+        <button @onclick="ViderAchetes">Retirer les articles achetés</button>
+    </footer>
+}
+
+<p class="lien">Version JavaScript : <a href="classique.html">classique.html</a></p>
+
+@code {
+    private List<Article>? articles;
+    private Article nouvel = new();
+    private string? erreur;
+
+    private int Restants => articles?.Count(a => !a.Achete) ?? 0;
+
+    // Équivalent du code d'initialisation d'une fenêtre WinDev.
+    protected override async Task OnInitializedAsync() => await Charger();
+
+    private async Task Charger() => articles = await Service.ListerAsync();
+
+    private async Task Ajouter()
+    {
+        if (await Service.AjouterAsync(nouvel) is null)
+        {
+            erreur = "Le nom est obligatoire.";
+            return;
+        }
+
+        erreur = null;
+        nouvel = new();
+        await Charger();
+    }
+
+    private async Task Basculer(int id)
+    {
+        await Service.BasculerAsync(id);
+        await Charger();
+    }
+
+    private async Task Supprimer(int id)
+    {
+        await Service.SupprimerAsync(id);
+        await Charger();
+    }
+
+    private async Task ViderAchetes()
+    {
+        await Service.SupprimerAchetesAsync();
+        await Charger();
+    }
+}
