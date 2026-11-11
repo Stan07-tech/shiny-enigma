@@ -14,11 +14,17 @@ public class ArticleService(IDbContextFactory<CoursesDbContext> dbFactory)
     public async Task<List<Article>> ListerAsync()
     {
         await using var db = await dbFactory.CreateDbContextAsync();
-        return await db.Articles
+        var articles = await db.Articles.ToListAsync();
+
+        // Le tri se fait en C# et non en SQL : SQLite compare les textes octet par
+        // octet ("frais" après "Fruits", "Épicerie" en dernier). En SQL Server, une
+        // collation French_CI_AS donnerait directement le bon ordre.
+        var comparaison = StringComparer.CurrentCultureIgnoreCase;
+        return articles
             .OrderBy(a => a.Achete)
-            .ThenBy(a => a.Rayon)
-            .ThenBy(a => a.Nom)
-            .ToListAsync();
+            .ThenBy(a => a.Rayon, comparaison)
+            .ThenBy(a => a.Nom, comparaison)
+            .ToList();
     }
 
     // INSERT INTO Articles ... (renvoie null si le nom est vide)

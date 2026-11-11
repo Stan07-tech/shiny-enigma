@@ -25,3 +25,8 @@ li.achete .nom { text-decoration: line-through; color: var(--doux); }
 footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px; color: var(--doux); font-size: .9rem; }
 .lien { margin-top: 24px; font-size: .85rem; color: var(--doux); }
 .lien a { color: var(--accent); }
+.rayons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.rayons a { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--bord); background: var(--carte); color: var(--texte); text-decoration: none; font-size: .9rem; }
+.rayons a.actif { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rayons .nb { font-size: .75rem; color: var(--doux); }
+.rayons a.actif .nb { color: #fff; opacity: .85; }

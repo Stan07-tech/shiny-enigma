@@ -1,7 +1,8 @@
 # Liste de courses (.NET 10 : ASP.NET Core, Blazor, MAUI)
 
 Petite application pour apprendre .NET : ajouter des articles, les cocher
-quand ils sont achetés, les supprimer.
+quand ils sont achetés, les supprimer, et parcourir la liste rayon par rayon
+(`/rayon/Boulangerie`, `/sans-rayon`).
 
 Trois interfaces partagent le même code métier :
 - **Site web Blazor** (page d'accueil `/`) : l'interface est écrite en C# ;
@@ -22,7 +23,8 @@ Trois interfaces partagent le même code métier :
 | `Shared/Models/Article.cs` | L'entité `Article` | Fichier de l'analyse / table |
 | `Shared/Data/CoursesDbContext.cs` | Accès à la base (EF Core) | `HOuvreConnexion` + analyse |
 | `Shared/Services/ArticleService.cs` | Logique métier partagée | Collection de procédures globales |
-| `Shared/Pages/Accueil.razor` | Interface Blazor (HTML + C#) | Fenêtre / page WEBDEV |
+| `Shared/Pages/Accueil.razor` | Interface Blazor (HTML + C#), tous les articles ou un rayon | Fenêtre / page WEBDEV |
+| `Shared/Pages/SansRayon.razor` | Articles sans rayon (réutilise `Accueil`) | Fenêtre ouverte avec un paramètre |
 | `ListeCourses/Program.cs` | Configuration du site + API REST | Code du projet / webservice |
 | `ListeCourses/wwwroot/classique.html` | Interface HTML + JavaScript | Page WEBDEV avec code navigateur |
 | `ListeCourses.Mobile/MauiProgram.cs` | Configuration de l'appli mobile | Code du projet |
