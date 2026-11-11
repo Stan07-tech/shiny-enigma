@@ -80,9 +80,17 @@ az sql server firewall-rule create --resource-group $rg --server $sql `
     --name MonPC --start-ip-address $monIp --end-ip-address $monIp
 ```
 
-Connectez-vous ensuite à `<nom du serveur>.database.windows.net` avec l'authentification
-SQL Server, l'utilisateur `$admin` et votre mot de passe. Les tables `Listes` et
-`Articles` apparaîtront après le premier démarrage du site.
+Dans SSMS, le nom du serveur est celui de la variable `$sql` suivi de
+`.database.windows.net` (ex. `sql-listecourses-lb2026.database.windows.net`).
+Pour l'afficher :
+
+```powershell
+az sql server show --resource-group $rg --name $sql --query fullyQualifiedDomainName -o tsv
+```
+
+Choisissez l'authentification SQL Server, l'utilisateur `$admin` (`adminlc`), votre
+mot de passe, et le chiffrement « Obligatoire ». Les tables `Listes` et `Articles`
+apparaîtront après le premier démarrage du site.
 
 ## 4. App Service (le site web)
 
