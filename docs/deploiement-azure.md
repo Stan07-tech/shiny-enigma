@@ -140,7 +140,19 @@ demandez une augmentation de quota dans le portail Azure (Aide + support,
 
 ## 5. Publier le site
 
-Depuis la racine du dépôt :
+Il faut d'abord le code sur votre PC. Avec Git :
+
+```powershell
+cd $HOME
+git clone -b claude/shopping-list-app-1dlkyt https://github.com/Stan07-tech/shiny-enigma.git
+cd shiny-enigma
+```
+
+Sans Git, téléchargez le ZIP de la branche sur GitHub (bouton **Code** puis
+**Download ZIP**), extrayez-le et placez-vous dans le dossier obtenu avec `cd`.
+La commande `ls` doit alors afficher `src`, `docs`, `tests` et `README.md`.
+
+Puis, depuis ce dossier :
 
 ```powershell
 dotnet publish src/ListeCourses -c Release -o publie
