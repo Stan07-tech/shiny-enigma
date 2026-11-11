@@ -17,6 +17,7 @@ Trois interfaces partagent le même code métier :
 | `src/ListeCourses.Shared` | Bibliothèque partagée : modèle, accès aux données, logique métier, page Blazor |
 | `src/ListeCourses` | Site web ASP.NET Core (Blazor + API REST) |
 | `src/ListeCourses.Mobile` | Appli mobile .NET MAUI (Android, et Windows pour tester sur PC) |
+| `tests/ListeCourses.Tests` | Tests xUnit : unitaires (service) et d'intégration (API, pages) |
 
 | Fichier | Rôle | Équivalent WinDev / SQL |
 |---|---|---|
@@ -39,6 +40,21 @@ dotnet run --project src/ListeCourses
 
 Puis ouvrir l'URL affichée dans la console (ex. : http://localhost:5xxx).
 La base SQLite `courses.db` est créée automatiquement au premier lancement.
+
+## Tests (xUnit)
+
+```bash
+dotnet test tests/ListeCourses.Tests
+```
+
+- `ArticleServiceTests.cs` : tests unitaires du service. Chaque test reçoit
+  une base SQLite **en mémoire** neuve (`BaseEnMemoire.cs`), donc aucun test
+  ne dépend d'un autre.
+- `ApiTests.cs` : tests d'intégration. `WebApplicationFactory` démarre le vrai
+  site en mémoire et l'appelle en HTTP (codes 201, 400, 404, pages Blazor).
+
+Vocabulaire : `[Fact]` = un test ; `[Theory]` + `[InlineData]` = le même test
+avec plusieurs jeux de valeurs ; `Assert.Equal(attendu, obtenu)` = la vérification.
 
 ## Appli Android
 
