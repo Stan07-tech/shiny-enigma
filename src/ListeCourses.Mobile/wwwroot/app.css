@@ -1,0 +1,37 @@
+/* Styles propres à l'appli mobile. Le reste vient de la bibliothèque partagée
+   (_content/ListeCourses.Shared/app.css). */
+
+/* Laisse la place à la barre d'état du téléphone (heure, batterie...). */
+.status-bar-safe-area {
+    position: sticky;
+    top: 0;
+    height: env(safe-area-inset-top, 0px);
+    background-color: var(--fond);
+    width: 100%;
+    z-index: 1;
+}
+
+main {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+#blazor-error-ui {
+    background: lightyellow;
+    color: #1f2328;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}

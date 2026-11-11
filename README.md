@@ -1,15 +1,35 @@
-# Liste de courses (ASP.NET Core + EF Core)
+# Liste de courses (.NET 10 : ASP.NET Core, Blazor, MAUI)
 
-Petite application web pour apprendre .NET : ajouter des articles, les cocher
+Petite application pour apprendre .NET : ajouter des articles, les cocher
 quand ils sont achetés, les supprimer.
 
-Deux interfaces utilisent les mêmes données :
-- **Blazor** (page d'accueil `/`) : l'interface est écrite en C# ;
-- **JavaScript** (`/classique.html`) : HTML + JavaScript qui appelle l'API REST.
+Trois interfaces partagent le même code métier :
+- **Site web Blazor** (page d'accueil `/`) : l'interface est écrite en C# ;
+- **Site web JavaScript** (`/classique.html`) : HTML + JavaScript qui appelle l'API REST ;
+- **Appli Android** (.NET MAUI Blazor Hybrid) : la même page Blazor, avec une
+  base SQLite stockée sur le téléphone (fonctionne sans connexion).
 
-## Lancer l'application
+## Structure de la solution
 
-Prérequis : [SDK .NET 8](https://dotnet.microsoft.com/download).
+| Projet | Rôle |
+|---|---|
+| `src/ListeCourses.Shared` | Bibliothèque partagée : modèle, accès aux données, logique métier, page Blazor |
+| `src/ListeCourses` | Site web ASP.NET Core (Blazor + API REST) |
+| `src/ListeCourses.Mobile` | Appli mobile .NET MAUI (Android, et Windows pour tester sur PC) |
+
+| Fichier | Rôle | Équivalent WinDev / SQL |
+|---|---|---|
+| `Shared/Models/Article.cs` | L'entité `Article` | Fichier de l'analyse / table |
+| `Shared/Data/CoursesDbContext.cs` | Accès à la base (EF Core) | `HOuvreConnexion` + analyse |
+| `Shared/Services/ArticleService.cs` | Logique métier partagée | Collection de procédures globales |
+| `Shared/Pages/Accueil.razor` | Interface Blazor (HTML + C#) | Fenêtre / page WEBDEV |
+| `ListeCourses/Program.cs` | Configuration du site + API REST | Code du projet / webservice |
+| `ListeCourses/wwwroot/classique.html` | Interface HTML + JavaScript | Page WEBDEV avec code navigateur |
+| `ListeCourses.Mobile/MauiProgram.cs` | Configuration de l'appli mobile | Code du projet |
+
+## Lancer le site web
+
+Prérequis : [SDK .NET 10](https://dotnet.microsoft.com/download).
 
 ```bash
 dotnet run --project src/ListeCourses
@@ -18,17 +38,27 @@ dotnet run --project src/ListeCourses
 Puis ouvrir l'URL affichée dans la console (ex. : http://localhost:5xxx).
 La base SQLite `courses.db` est créée automatiquement au premier lancement.
 
-## Structure
+## Appli Android
 
-| Fichier | Rôle | Équivalent WinDev / SQL |
-|---|---|---|
-| `Models/Article.cs` | L'entité `Article` | Fichier de l'analyse / table |
-| `Data/CoursesDbContext.cs` | Accès à la base (EF Core) | `HOuvreConnexion` + analyse |
-| `Services/ArticleService.cs` | Logique métier partagée (API + Blazor) | Collection de procédures globales |
-| `Program.cs` | Configuration + API REST | Code du projet / webservice |
-| `Components/Pages/Accueil.razor` | Interface Blazor (HTML + C#) | Fenêtre / page WEBDEV |
-| `Components/App.razor`, `Routes.razor` | Squelette HTML et routage Blazor | Projet / modèle de pages |
-| `wwwroot/classique.html` | Interface HTML + JavaScript | Page WEBDEV avec code navigateur |
+Prérequis : SDK .NET 10 + workload MAUI (`dotnet workload install maui-android`),
+ou Visual Studio 2026 avec la charge de travail « Développement .NET Multi-platform App UI ».
+
+Générer l'APK :
+
+```bash
+dotnet publish src/ListeCourses.Mobile -f net10.0-android -c Release
+```
+
+Le fichier `com.shinyenigma.listecourses-Signed.apk` se trouve ensuite dans
+`src/ListeCourses.Mobile/bin/Release/net10.0-android/publish/`. Il est signé avec
+une clé de débogage : parfait pour l'installer sur son propre téléphone, mais il
+faudra une clé personnelle pour une publication sur le Play Store.
+
+Sous Windows, on peut aussi lancer l'appli directement sur le PC (cible
+`net10.0-windows10.0.19041.0` dans Visual Studio) pour tester sans téléphone.
+
+> Le projet mobile nécessite le workload MAUI : sans lui, compiler toute la
+> solution échoue. Le site web seul se compile avec `dotnet build src/ListeCourses`.
 
 ## API
 
@@ -40,9 +70,9 @@ La base SQLite `courses.db` est créée automatiquement au premier lancement.
 | DELETE | `/api/articles/{id}` | `DELETE … WHERE Id = @id` |
 | DELETE | `/api/articles/achetes` | `DELETE … WHERE Achete = 1` |
 
-## Passer à SQL Server
+## Passer à SQL Server (site web)
 
-1. `dotnet add src/ListeCourses package Microsoft.EntityFrameworkCore.SqlServer --version 8.0.11`
+1. `dotnet add src/ListeCourses package Microsoft.EntityFrameworkCore.SqlServer --version 10.0.15`
 2. Dans `Program.cs`, remplacer `UseSqlite(...GetConnectionString("Courses"))`
    par `UseSqlServer(...GetConnectionString("SqlServer"))`.
 3. Adapter la chaîne `SqlServer` dans `appsettings.json`.

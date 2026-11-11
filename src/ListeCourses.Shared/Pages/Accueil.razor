@@ -2,7 +2,8 @@
 @inject ArticleService Service
 
 @* Un composant Razor = du HTML + du C#. C'est l'équivalent d'une fenêtre
-   WinDev : les champs (HTML) et le code des événements (@code plus bas). *@
+   WinDev : les champs (HTML) et le code des événements (@code plus bas).
+   Cette page est partagée : le site web et l'appli Android l'affichent. *@
 
 <PageTitle>Liste de courses</PageTitle>
 
@@ -48,8 +49,6 @@ else
         <button @onclick="ViderAchetes">Retirer les articles achetés</button>
     </footer>
 }
-
-<p class="lien">Version JavaScript : <a href="classique.html">classique.html</a></p>
 
 @code {
     private List<Article>? articles;

@@ -1,0 +1,7 @@
+@* Les pages sont dans la bibliothèque partagée : on indique au routeur où les chercher. *@
+<Router AppAssembly="typeof(ListeCourses.Pages.Accueil).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+</Router>

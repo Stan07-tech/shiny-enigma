@@ -27,8 +27,8 @@ using (var db = app.Services.GetRequiredService<IDbContextFactory<CoursesDbConte
     db.Database.EnsureCreated();
 }
 
-app.UseStaticFiles();
 app.UseAntiforgery();
+app.MapStaticAssets();
 
 // ----- API REST -----
 var api = app.MapGroup("/api/articles");
@@ -56,6 +56,7 @@ api.MapDelete("/achetes", async (ArticleService service) =>
 
 // ----- Interface Blazor -----
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode()
+    .AddAdditionalAssemblies(typeof(ListeCourses.Pages.Accueil).Assembly);
 
 app.Run();
