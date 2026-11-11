@@ -27,63 +27,91 @@ public sealed class SiteDeTest : WebApplicationFactory<Program>
 }
 
 // IClassFixture : un seul site démarré pour tous les tests de cette classe.
-// Les tests partagent donc la base : chacun ne vérifie que ce qu'il a créé.
+// Les tests partagent donc la base : chacun crée sa propre liste.
 public sealed class ApiTests(SiteDeTest site) : IClassFixture<SiteDeTest>
 {
     private readonly HttpClient client = site.CreateClient();
 
     [Fact]
-    public async Task Post_ArticleValide_Renvoie201EtLArticleEstListe()
+    public async Task PostListe_Renvoie201AvecUnCode_AccessibleEnMinuscules()
     {
-        var reponse = await client.PostAsJsonAsync("/api/articles", new { nom = "Café", rayon = "Épicerie" });
+        var reponse = await client.PostAsJsonAsync("/api/listes", new { nom = "Maison" });
 
         Assert.Equal(HttpStatusCode.Created, reponse.StatusCode);
-        var cree = await reponse.Content.ReadFromJsonAsync<Article>();
-        Assert.Equal($"/api/articles/{cree!.Id}", reponse.Headers.Location?.OriginalString);
+        var liste = (await reponse.Content.ReadFromJsonAsync<ListeResume>())!;
+        Assert.True(CodeListe.EstValide(liste.Code));
 
-        var articles = await client.GetFromJsonAsync<List<Article>>("/api/articles");
+        var lue = await client.GetFromJsonAsync<ListeResume>($"/api/listes/{liste.Code.ToLowerInvariant()}");
+        Assert.Equal(liste, lue);
+    }
+
+    [Theory]
+    [InlineData("/api/listes/AAAAAAAAAA")]
+    [InlineData("/api/listes/AAAAAAAAAA/articles")]
+    public async Task ListeInconnue_Renvoie404(string url)
+    {
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(url)).StatusCode);
+    }
+
+    [Fact]
+    public async Task PostArticle_Renvoie201EtLArticleEstListe()
+    {
+        var code = await CreerListe();
+
+        var reponse = await client.PostAsJsonAsync($"/api/listes/{code}/articles", new { nom = "Café", rayon = "Épicerie" });
+
+        Assert.Equal(HttpStatusCode.Created, reponse.StatusCode);
+        var cree = (await reponse.Content.ReadFromJsonAsync<Article>())!;
+        Assert.Equal($"/api/listes/{code}/articles/{cree.Id}", reponse.Headers.Location?.OriginalString);
+        var articles = await client.GetFromJsonAsync<List<Article>>($"/api/listes/{code}/articles");
         Assert.Contains(articles!, a => a.Id == cree.Id && a.Nom == "Café");
     }
 
     [Fact]
-    public async Task Post_NomVide_Renvoie400()
+    public async Task PostArticle_NomVide_Renvoie400()
     {
-        var reponse = await client.PostAsJsonAsync("/api/articles", new { nom = "  " });
+        var code = await CreerListe();
+
+        var reponse = await client.PostAsJsonAsync($"/api/listes/{code}/articles", new { nom = "  " });
 
         Assert.Equal(HttpStatusCode.BadRequest, reponse.StatusCode);
     }
 
     [Fact]
-    public async Task Patch_Basculer_MarqueLArticleCommeAchete()
+    public async Task PostArticle_ListeInconnue_Renvoie404()
     {
-        var cree = await (await client.PostAsJsonAsync("/api/articles", new { nom = "Thé" }))
-            .Content.ReadFromJsonAsync<Article>();
-
-        var reponse = await client.PatchAsync($"/api/articles/{cree!.Id}/basculer", null);
-
-        Assert.Equal(HttpStatusCode.OK, reponse.StatusCode);
-        Assert.True((await reponse.Content.ReadFromJsonAsync<Article>())!.Achete);
-    }
-
-    [Theory]
-    [InlineData("PATCH", "/api/articles/999999/basculer")]
-    [InlineData("DELETE", "/api/articles/999999")]
-    public async Task IdInconnu_Renvoie404(string methode, string url)
-    {
-        var reponse = await client.SendAsync(new HttpRequestMessage(new HttpMethod(methode), url));
+        var reponse = await client.PostAsJsonAsync("/api/listes/AAAAAAAAAA/articles", new { nom = "Pain" });
 
         Assert.Equal(HttpStatusCode.NotFound, reponse.StatusCode);
     }
 
+    [Fact]
+    public async Task ArticleDUneAutreListe_Renvoie404()
+    {
+        var maison = await CreerListe();
+        var bbq = await CreerListe();
+        var pain = await (await client.PostAsJsonAsync($"/api/listes/{maison}/articles", new { nom = "Pain" }))
+            .Content.ReadFromJsonAsync<Article>();
+
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PatchAsync($"/api/listes/{bbq}/articles/{pain!.Id}/basculer", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"/api/listes/{bbq}/articles/{pain.Id}")).StatusCode);
+    }
+
     [Theory]
     [InlineData("/")]
-    [InlineData("/rayon/Frais")]
-    [InlineData("/sans-rayon")]
-    public async Task PagesBlazor_SAffichent(string url)
+    [InlineData("/l/AAAAAAAAAA")]
+    [InlineData("/l/AAAAAAAAAA/rayon/Frais")]
+    [InlineData("/l/AAAAAAAAAA/sans-rayon")]
+    [InlineData("/classique.html")]
+    public async Task Pages_SAffichent(string url)
     {
         var reponse = await client.GetAsync(url);
 
         Assert.Equal(HttpStatusCode.OK, reponse.StatusCode);
-        Assert.Contains("🛒", await reponse.Content.ReadAsStringAsync());
+        Assert.Contains("<html lang=\"fr\">", await reponse.Content.ReadAsStringAsync());
     }
+
+    private async Task<string> CreerListe() =>
+        (await (await client.PostAsJsonAsync("/api/listes", new { nom = "Test" }))
+            .Content.ReadFromJsonAsync<ListeResume>())!.Code;
 }

@@ -48,11 +48,20 @@
 </main>
 
 <script>
-  const api = '/api/articles';
+  // Le code de la liste vient de l'adresse : classique.html?liste=K7MZ2QH9XA
+  const code = new URLSearchParams(location.search).get('liste');
+  const api = `/api/listes/${encodeURIComponent(code ?? '')}/articles`;
   const liste = document.getElementById('liste');
 
   async function charger() {
-    const articles = await (await fetch(api)).json();
+    const reponse = await fetch(api);
+    if (!reponse.ok) {
+      document.getElementById('ajout').hidden = true;
+      document.querySelector('footer').hidden = true;
+      liste.innerHTML = '<li class="vide">Liste introuvable. Ouvrez cette page avec le code d\'une liste : classique.html?liste=CODE</li>';
+      return;
+    }
+    const articles = await reponse.json();
     liste.innerHTML = '';
     if (articles.length === 0) {
       liste.innerHTML = '<li class="vide">La liste est vide.</li>';

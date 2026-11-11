@@ -28,3 +28,11 @@ footer { display: flex; justify-content: space-between; align-items: center; gap
 .rayons a.actif { background: var(--accent); border-color: var(--accent); color: #fff; }
 .rayons .nb { font-size: .75rem; color: var(--doux); }
 .rayons a.actif .nb { color: #fff; opacity: .85; }
+h2 { font-size: 1.05rem; margin: 24px 0 8px; }
+.retour { margin: 0 0 8px; font-size: .9rem; }
+.retour a, li a.nom { color: var(--accent); text-decoration: none; }
+li a.nom { font-weight: 500; }
+.partage { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; font-size: .9rem; color: var(--doux); }
+.partage button { padding: 6px 12px; }
+.code strong { color: var(--texte); letter-spacing: .05em; }
+.info { color: var(--accent); }

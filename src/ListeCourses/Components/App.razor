@@ -6,10 +6,16 @@
     <base href="/" />
     @* Les fichiers wwwroot d'une bibliothèque sont servis sous _content/<NomDeLaBibliothèque>/ *@
     <link rel="stylesheet" href="_content/ListeCourses.Shared/app.css" />
-    <HeadOutlet @rendermode="InteractiveServer" />
+    <HeadOutlet @rendermode="ModeRendu" />
 </head>
 <body>
-    <Routes @rendermode="InteractiveServer" />
+    <Routes @rendermode="ModeRendu" />
     <script src="_framework/blazor.web.js"></script>
 </body>
 </html>
+
+@code {
+    // Sans "prérendu" : les pages lisent le localStorage du navigateur ("Mes listes"),
+    // ce qui n'est possible qu'une fois la connexion au navigateur établie.
+    private static readonly IComponentRenderMode ModeRendu = new InteractiveServerRenderMode(prerender: false);
+}

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <!-- Bibliothèque partagée par le site web et l'appli mobile :
-       modèle, accès aux données, logique métier et page Blazor. -->
+       modèles, contrat IListeService, client API et pages Blazor. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -15,7 +15,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.15" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.15" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.15" />
   </ItemGroup>
 
 </Project>

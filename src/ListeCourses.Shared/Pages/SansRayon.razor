@@ -1,6 +1,10 @@
-@page "/sans-rayon"
+@page "/l/{Code}/sans-rayon"
 
-@* Les articles sans rayon : on réutilise simplement la page d'accueil
+@* Les articles sans rayon : on réutilise simplement la page de la liste
    en lui passant un paramètre, comme on ouvrirait une fenêtre WinDev
    avec un paramètre. *@
-<Accueil SansRayon="true" />
+<PageListe Code="@Code" SansRayon="true" />
+
+@code {
+    [Parameter] public string Code { get; set; } = "";
+}

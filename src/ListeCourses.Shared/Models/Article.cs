@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ListeCourses.Models;
 
 // Une "entité" : l'équivalent d'un fichier de données (analyse WinDev)
@@ -10,4 +12,9 @@ public class Article
     public string? Rayon { get; set; }               // Le "?" = colonne NULLable
     public bool Achete { get; set; }                 // BIT
     public DateTime DateAjout { get; set; } = DateTime.UtcNow;
+
+    // Clé étrangère vers la liste (FOREIGN KEY ... REFERENCES Listes(Id)).
+    // [JsonIgnore] : inutile de l'envoyer aux clients, ils passent par le code de la liste.
+    [JsonIgnore]
+    public int ListeId { get; set; }
 }

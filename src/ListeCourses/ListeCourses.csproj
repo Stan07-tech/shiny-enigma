@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- SQLite en développement, Azure SQL (SQL Server) en production. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.15" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.15" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\ListeCourses.Shared\ListeCourses.Shared.csproj" />
   </ItemGroup>
 

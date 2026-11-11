@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Razor">
+﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
 
     <PropertyGroup>
         <TargetFrameworks>net10.0-android</TargetFrameworks>
@@ -77,12 +77,9 @@
     </ItemGroup>
 
     <!-- En Release, l'APK est "élagué" (trimming) : le code jugé inutilisé est retiré.
-         Entity Framework Core utilise la réflexion, on protège donc ces assemblies. -->
+         On protège la bibliothèque partagée (pages Blazor, modèles). -->
     <ItemGroup>
         <TrimmerRootAssembly Include="ListeCourses.Shared" />
-        <TrimmerRootAssembly Include="Microsoft.EntityFrameworkCore" />
-        <TrimmerRootAssembly Include="Microsoft.EntityFrameworkCore.Relational" />
-        <TrimmerRootAssembly Include="Microsoft.EntityFrameworkCore.Sqlite" />
     </ItemGroup>
 
 </Project>

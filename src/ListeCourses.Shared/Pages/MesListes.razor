@@ -1,0 +1,108 @@
+@page "/"
+@inject IListeService Service
+@inject IListesConnues ListesConnues
+@inject NavigationManager Navigation
+
+@* Page d'accueil : les listes connues de cet appareil, la création d'une
+   liste et l'accès à une liste partagée (par son code ou son lien). *@
+
+<PageTitle>Mes listes de courses</PageTitle>
+
+<h1>🛒 Mes listes</h1>
+
+@if (listes is null)
+{
+    <p class="vide">@(erreur ?? "Chargement…")</p>
+}
+else
+{
+    <ul>
+        @if (listes.Count == 0)
+        {
+            <li class="vide">Aucune liste pour l'instant. Créez-en une, ou rejoignez celle qu'on vous a partagée.</li>
+        }
+        @foreach (var l in listes)
+        {
+            <li @key="l.Code">
+                <a class="nom" href="l/@l.Code">@l.Nom</a>
+                <span class="rayon">@l.Restants à acheter</span>
+                <button class="suppr" title="Retirer de mes listes (la liste n'est pas supprimée)"
+                        @onclick="() => Oublier(l.Code)">✕</button>
+            </li>
+        }
+    </ul>
+}
+
+<h2>Nouvelle liste</h2>
+<form class="ajout" @onsubmit="Creer">
+    <input class="nom-saisie" placeholder="Nom (ex. : Maison)" maxlength="100" @bind="nomNouvelle" />
+    <button class="principal" type="submit">Créer</button>
+</form>
+
+<h2>Rejoindre une liste</h2>
+<form class="ajout" @onsubmit="Rejoindre">
+    <input class="nom-saisie" placeholder="Code ou lien reçu" autocomplete="off" @bind="saisieRejoindre" />
+    <button type="submit">Rejoindre</button>
+</form>
+
+@if (erreur is not null && listes is not null)
+{
+    <p class="erreur">@erreur</p>
+}
+
+@code {
+    private List<ListeResume>? listes;
+    private string? nomNouvelle;
+    private string? saisieRejoindre;
+    private string? erreur;
+
+    protected override Task OnInitializedAsync() => Executer(async () =>
+    {
+        var codes = await ListesConnues.CodesAsync();
+        var resumes = await Service.ResumesAsync(codes);
+        // Même ordre que sur l'appareil (la plus récente en premier).
+        listes = resumes.OrderBy(r => codes.IndexOf(r.Code)).ToList();
+    });
+
+    private Task Creer() => Executer(async () =>
+    {
+        var liste = await Service.CreerAsync(nomNouvelle ?? "");
+        await ListesConnues.AjouterAsync(liste.Code);
+        Navigation.NavigateTo($"l/{liste.Code}");
+    });
+
+    private Task Rejoindre() => Executer(async () =>
+    {
+        var code = CodeListe.Extraire(saisieRejoindre);
+        if (code is null)
+        {
+            erreur = "Code ou lien invalide.";
+            return;
+        }
+        if (await Service.ObtenirAsync(code) is null)
+        {
+            erreur = "Aucune liste ne correspond à ce code.";
+            return;
+        }
+        Navigation.NavigateTo($"l/{code}");
+    });
+
+    private async Task Oublier(string code)
+    {
+        await ListesConnues.RetirerAsync(code);
+        listes?.RemoveAll(l => l.Code == code);
+    }
+
+    private async Task Executer(Func<Task> action)
+    {
+        try
+        {
+            erreur = null;
+            await action();
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        {
+            erreur = "Connexion au serveur impossible. Vérifiez votre accès à Internet.";
+        }
+    }
+}

@@ -1,0 +1,249 @@
+@page "/l/{Code}"
+@page "/l/{Code}/rayon/{Rayon}"
+@implements IAsyncDisposable
+@inject IListeService Service
+@inject IListesConnues ListesConnues
+@inject IPartage Partage
+
+@* Un composant Razor = du HTML + du C#. C'est l'équivalent d'une fenêtre
+   WinDev : les champs (HTML) et le code des événements (@code plus bas).
+   Cette page est partagée : le site web et l'appli Android l'affichent.
+   Adresses : "/l/CODE" (toute la liste) et "/l/CODE/rayon/Boulangerie". *@
+
+<p class="retour"><a href="">← Mes listes</a></p>
+
+@if (introuvable)
+{
+    <PageTitle>Liste introuvable</PageTitle>
+    <h1>Liste introuvable</h1>
+    <p class="vide">Aucune liste ne correspond à ce lien. Vérifiez le code reçu.</p>
+}
+else if (liste is null)
+{
+    <p class="vide">@(erreur ?? "Chargement…")</p>
+}
+else
+{
+    <PageTitle>@(TitreVue is null ? liste.Nom : $"{TitreVue} – {liste.Nom}")</PageTitle>
+
+    <h1>🛒 @liste.Nom</h1>
+
+    <div class="partage">
+        <button @onclick="Partager">Partager la liste</button>
+        <span class="code" title="Code de la liste">Code : <strong>@liste.Code</strong></span>
+        @if (info is not null)
+        {
+            <span class="info">@info</span>
+        }
+    </div>
+
+    <form class="ajout" @onsubmit="Ajouter">
+        <input class="nom-saisie" placeholder="Article (ex. : pain)" maxlength="100" autocomplete="off"
+               @bind="nouvel.Nom" />
+        <input class="quantite" type="number" min="1" aria-label="Quantité" @bind="nouvel.Quantite" />
+        <input class="rayon-saisie" placeholder="Rayon" maxlength="50" @bind="nouvel.Rayon" />
+        <button class="principal" type="submit">Ajouter</button>
+    </form>
+
+    @if (erreur is not null)
+    {
+        <p class="erreur">@erreur</p>
+    }
+
+    @if (articles is not null)
+    {
+        <nav class="rayons" aria-label="Rayons">
+            <a href="l/@liste.Code" class="@(EstVueTous ? "actif" : null)">Tous</a>
+            @foreach (var r in Rayons)
+            {
+                <a href="l/@liste.Code/rayon/@Uri.EscapeDataString(r.Nom)" class="@(EstRayon(r.Nom) ? "actif" : null)">
+                    @r.Nom <span class="nb">@r.Restants</span>
+                </a>
+            }
+            @if (articles.Any(a => a.Rayon is null))
+            {
+                <a href="l/@liste.Code/sans-rayon" class="@(SansRayon ? "actif" : null)">Sans rayon</a>
+            }
+        </nav>
+
+        <ul>
+            @if (!Visibles.Any())
+            {
+                <li class="vide">@(articles.Count == 0 ? "La liste est vide." : "Aucun article dans ce rayon.")</li>
+            }
+            @foreach (var a in Visibles)
+            {
+                <li @key="a.Id" class="@(a.Achete ? "achete" : null)">
+                    <input type="checkbox" checked="@a.Achete" @onchange="() => Basculer(a.Id)" />
+                    <span class="nom">@a.Nom@(a.Quantite > 1 ? $" × {a.Quantite}" : "")</span>
+                    @if (EstVueTous)
+                    {
+                        <span class="rayon">@a.Rayon</span>
+                    }
+                    <button class="suppr" title="Supprimer" @onclick="() => Supprimer(a.Id)">✕</button>
+                </li>
+            }
+        </ul>
+
+        <footer>
+            <span>@Restants article@(Restants > 1 ? "s" : "") restant@(Restants > 1 ? "s" : "")</span>
+            <button @onclick="ViderAchetes">Retirer les articles achetés</button>
+        </footer>
+    }
+}
+
+@code {
+    // Remplis automatiquement depuis l'adresse ("/l/{Code}/rayon/{Rayon}").
+    [Parameter] public string Code { get; set; } = "";
+    [Parameter] public string? Rayon { get; set; }
+
+    // Vrai quand la page est affichée par SansRayon.razor ("/l/{Code}/sans-rayon").
+    [Parameter] public bool SansRayon { get; set; }
+
+    private record RayonResume(string Nom, int Restants);
+
+    private ListeResume? liste;
+    private List<Article>? articles;
+    private Article nouvel = new();
+    private string? erreur;
+    private string? info;
+    private bool introuvable;
+    private string? codeCharge;
+    private IAsyncDisposable? suivi;
+
+    private bool EstVueTous => Rayon is null && !SansRayon;
+
+    private string? TitreVue => SansRayon ? "Sans rayon" : Rayon;
+
+    // Comparaison sans tenir compte des majuscules : "frais" et "Frais" = même rayon.
+    private bool EstRayon(string? nom) =>
+        string.Equals(nom, Rayon, StringComparison.CurrentCultureIgnoreCase);
+
+    // Articles de la vue courante : l'équivalent d'un WHERE, mais en mémoire (LINQ to Objects).
+    private IEnumerable<Article> Visibles =>
+        SansRayon ? articles!.Where(a => a.Rayon is null)
+        : Rayon is null ? articles!
+        : articles!.Where(a => EstRayon(a.Rayon));
+
+    // SELECT Rayon, SUM(CASE WHEN Achete = 0 THEN 1 ELSE 0 END) ... GROUP BY Rayon
+    private IEnumerable<RayonResume> Rayons => articles!
+        .Where(a => a.Rayon is not null)
+        .GroupBy(a => a.Rayon!, StringComparer.CurrentCultureIgnoreCase)
+        .Select(g => new RayonResume(g.Key, g.Count(a => !a.Achete)))
+        .OrderBy(r => r.Nom, StringComparer.CurrentCultureIgnoreCase);
+
+    private int Restants => articles is null ? 0 : Visibles.Count(a => !a.Achete);
+
+    // Appelé à chaque changement d'adresse : changement de rayon, ou d'une liste à l'autre.
+    protected override async Task OnParametersSetAsync()
+    {
+        nouvel = new() { Rayon = Rayon };
+        erreur = null;
+
+        if (Code == codeCharge) return;   // même liste, autre rayon : rien à recharger
+
+        await ArreterSuivi();
+        codeCharge = Code;
+        liste = null;
+        articles = null;
+        introuvable = false;
+        info = null;
+
+        await Executer(async () =>
+        {
+            var code = CodeListe.Extraire(Code);
+            liste = code is null ? null : await Service.ObtenirAsync(code);
+            if (liste is null)
+            {
+                introuvable = true;
+                return;
+            }
+
+            await ListesConnues.AjouterAsync(liste.Code);
+            await Charger();
+
+            // Temps réel : quand quelqu'un d'autre modifie la liste, on recharge.
+            // InvokeAsync revient sur le "fil" de la page avant de la redessiner.
+            suivi = await Service.SuivreAsync(liste.Code, () => InvokeAsync(async () =>
+            {
+                await Executer(Charger);
+                StateHasChanged();
+            }));
+        });
+    }
+
+    private async Task Charger() => articles = await Service.ArticlesAsync(liste!.Code) ?? [];
+
+    // Sur mobile, le réseau peut manquer (au fond du magasin...) : on affiche
+    // un message au lieu de laisser l'erreur faire planter la page.
+    private async Task Executer(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        {
+            erreur = "Connexion au serveur impossible. Vérifiez votre accès à Internet.";
+        }
+    }
+
+    private async Task Ajouter()
+    {
+        if (string.IsNullOrWhiteSpace(nouvel.Nom))
+        {
+            erreur = "Le nom est obligatoire.";
+            return;
+        }
+
+        await Executer(async () =>
+        {
+            await Service.AjouterAsync(liste!.Code, nouvel);
+            erreur = null;
+            nouvel = new() { Rayon = Rayon };
+            await Charger();
+        });
+    }
+
+    private Task Basculer(int id) => Executer(async () =>
+    {
+        await Service.BasculerAsync(liste!.Code, id);
+        await Charger();
+    });
+
+    private Task Supprimer(int id) => Executer(async () =>
+    {
+        await Service.SupprimerAsync(liste!.Code, id);
+        await Charger();
+    });
+
+    // Ne retire que les articles achetés de la vue courante (tous, ou ce rayon).
+    private Task ViderAchetes() => Executer(async () =>
+    {
+        if (EstVueTous)
+        {
+            await Service.SupprimerAchetesAsync(liste!.Code);
+        }
+        else
+        {
+            foreach (var a in Visibles.Where(a => a.Achete).ToList())
+                await Service.SupprimerAsync(liste!.Code, a.Id);
+        }
+
+        await Charger();
+    });
+
+    private async Task Partager()
+    {
+        var copie = await Partage.PartagerAsync(liste!.Nom, Partage.Lien(liste.Code));
+        info = copie ? "Lien copié !" : null;
+    }
+
+    private async Task ArreterSuivi()
+    {
+        if (suivi is not null) await suivi.DisposeAsync();
+        suivi = null;
+    }
+
+    public async ValueTask DisposeAsync() => await ArreterSuivi();
+}
