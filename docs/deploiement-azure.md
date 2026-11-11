@@ -112,6 +112,32 @@ az webapp config connection-string set --resource-group $rg --name $app `
     --connection-string-type SQLAzure --settings Courses=$chaine
 ```
 
+### Si la création du plan échoue
+
+- `Operation cannot be completed without additional quota` : l'abonnement n'a pas de
+  quota pour cette offre dans cette région.
+- `The selected region is currently not accepting new customers` : la région est saturée.
+
+Dans les deux cas, essayez d'autres régions. Le site peut être dans une autre région
+que la base. Cette boucle les essaie l'une après l'autre et s'arrête à la première
+qui accepte :
+
+```powershell
+foreach ($r in "northeurope", "swedencentral", "germanywestcentral", "uksouth", "italynorth") {
+    Write-Host "Essai : $r" -ForegroundColor Cyan
+    az appservice plan create --resource-group $rg --name $plan --sku F1 --is-linux --location $r
+    if ($LASTEXITCODE -eq 0) {
+        $regionSite = $r
+        Write-Host "Plan créé en $r" -ForegroundColor Green
+        break
+    }
+}
+```
+
+Si aucune région n'accepte F1, relancez la boucle avec `--sku B1`. En dernier recours,
+demandez une augmentation de quota dans le portail Azure (Aide + support,
+« Limites de service et d'abonnement (quotas) »).
+
 ## 5. Publier le site
 
 Depuis la racine du dépôt :
