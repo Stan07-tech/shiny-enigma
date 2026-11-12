@@ -21,6 +21,10 @@
 else if (liste is null)
 {
     <p class="vide">@(erreur ?? "Chargement…")</p>
+    @if (erreurConnexion)
+    {
+        <p class="vide"><button class="principal" @onclick="Recharger">Réessayer</button></p>
+    }
 }
 else
 {
@@ -48,6 +52,10 @@ else
     @if (erreur is not null)
     {
         <p class="erreur">@erreur</p>
+        @if (erreurConnexion)
+        {
+            <p><button class="reessayer" @onclick="Recharger">Réessayer</button></p>
+        }
     }
 
     @if (articles is not null)
@@ -106,6 +114,7 @@ else
     private List<Article>? articles;
     private Article nouvel = new();
     private string? erreur;
+    private bool erreurConnexion;
     private string? info;
     private bool introuvable;
     private string? codeCharge;
@@ -139,6 +148,7 @@ else
     {
         nouvel = new() { Rayon = Rayon };
         erreur = null;
+        erreurConnexion = false;
 
         if (Code == codeCharge) return;   // même liste, autre rayon : rien à recharger
 
@@ -174,18 +184,29 @@ else
 
     private async Task Charger() => articles = await Service.ArticlesAsync(liste!.Code) ?? [];
 
-    // Sur mobile, le réseau peut manquer (au fond du magasin...) : on affiche
-    // un message au lieu de laisser l'erreur faire planter la page.
+    // Sur mobile, le réseau peut manquer (au fond du magasin...) ou le serveur
+    // être en veille : on affiche un message au lieu de laisser la page planter.
+    // On intercepte TOUTES les exceptions : sur Android, les erreurs réseau n'ont
+    // pas toujours le même type (HttpRequestException, TaskCanceledException,
+    // exceptions Java...).
     private async Task Executer(Func<Task> action)
     {
         try
         {
             await action();
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        catch (Exception e)
         {
-            erreur = "Connexion au serveur impossible. Vérifiez votre accès à Internet.";
+            erreur = $"Le serveur ne répond pas. Vérifiez votre connexion Internet, puis réessayez. ({e.GetType().Name})";
+            erreurConnexion = true;
         }
+    }
+
+    // Bouton "Réessayer" : on recharge tout, comme à l'ouverture de la page.
+    private async Task Recharger()
+    {
+        codeCharge = null;
+        await OnParametersSetAsync();
     }
 
     private async Task Ajouter()
@@ -233,11 +254,11 @@ else
         await Charger();
     });
 
-    private async Task Partager()
+    private Task Partager() => Executer(async () =>
     {
         var copie = await Partage.PartagerAsync(liste!.Nom, Partage.Lien(liste.Code));
         info = copie ? "Lien copié !" : null;
-    }
+    });
 
     private async Task ArreterSuivi()
     {

@@ -11,6 +11,8 @@ namespace ListeCourses.Services;
 // l'API REST du serveur, et les notifications arrivent par SignalR.
 public sealed class ListeServiceApi(HttpClient http, HubConnection hub) : IListeService, IAsyncDisposable
 {
+    private const int NombreEssais = 3;
+
     private readonly SemaphoreSlim verrouConnexion = new(1, 1);
     private readonly List<(string Code, Func<Task> Rappel)> abonnements = [];
     private bool gestionnairesInstalles;
@@ -31,29 +33,30 @@ public sealed class ListeServiceApi(HttpClient http, HubConnection hub) : IListe
         return (await reponse.Content.ReadFromJsonAsync(JsonListes.Default.ListeResume))!;
     }
 
-    public Task<ListeResume?> ObtenirAsync(string code) =>
-        LireOuNullAsync(http.GetAsync($"api/listes/{code}"), JsonListes.Default.ListeResume);
+    public async Task<ListeResume?> ObtenirAsync(string code) =>
+        await LireOuNullAsync(await AvecReessaisAsync(() => http.GetAsync($"api/listes/{code}")), JsonListes.Default.ListeResume);
 
     public async Task<List<ListeResume>> ResumesAsync(IEnumerable<string> codes)
     {
-        var reponse = await http.PostAsJsonAsync("api/listes/resumes", codes.ToList(), JsonListes.Default.ListString);
+        var liste = codes.ToList();
+        var reponse = await AvecReessaisAsync(() => http.PostAsJsonAsync("api/listes/resumes", liste, JsonListes.Default.ListString));
         reponse.EnsureSuccessStatusCode();
         return (await reponse.Content.ReadFromJsonAsync(JsonListes.Default.ListListeResume))!;
     }
 
-    public Task<List<Article>?> ArticlesAsync(string code) =>
-        LireOuNullAsync(http.GetAsync($"api/listes/{code}/articles"), JsonListes.Default.ListArticle);
+    public async Task<List<Article>?> ArticlesAsync(string code) =>
+        await LireOuNullAsync(await AvecReessaisAsync(() => http.GetAsync($"api/listes/{code}/articles")), JsonListes.Default.ListArticle);
 
     public async Task<Article?> AjouterAsync(string code, Article article)
     {
         if (string.IsNullOrWhiteSpace(article.Nom)) return null;
         return await LireOuNullAsync(
-            http.PostAsJsonAsync($"api/listes/{code}/articles", article, JsonListes.Default.Article),
+            await http.PostAsJsonAsync($"api/listes/{code}/articles", article, JsonListes.Default.Article),
             JsonListes.Default.Article);
     }
 
-    public Task<Article?> BasculerAsync(string code, int id) =>
-        LireOuNullAsync(http.PatchAsync($"api/listes/{code}/articles/{id}/basculer", null), JsonListes.Default.Article);
+    public async Task<Article?> BasculerAsync(string code, int id) =>
+        await LireOuNullAsync(await http.PatchAsync($"api/listes/{code}/articles/{id}/basculer", null), JsonListes.Default.Article);
 
     public async Task<bool> SupprimerAsync(string code, int id)
     {
@@ -134,11 +137,30 @@ public sealed class ListeServiceApi(HttpClient http, HubConnection hub) : IListe
         }
     }
 
-    // GET/POST... qui renvoie null sur 404, lève une exception sur les autres erreurs.
-    private static async Task<T?> LireOuNullAsync<T>(Task<HttpResponseMessage> requete,
+    // Lecture avec nouvelles tentatives. Au réveil du serveur (offre gratuite d'Azure :
+    // site en veille, base en pause), les premières requêtes peuvent échouer ou expirer.
+    // On ne réessaie que les lectures : réessayer un ajout pourrait le faire en double.
+    private static async Task<HttpResponseMessage> AvecReessaisAsync(Func<Task<HttpResponseMessage>> requete)
+    {
+        for (var essai = 1; ; essai++)
+        {
+            try
+            {
+                var reponse = await requete();
+                if ((int)reponse.StatusCode < 500 || essai == NombreEssais) return reponse;
+            }
+            catch (Exception) when (essai < NombreEssais)
+            {
+                // Erreur réseau ou délai dépassé : on attend un peu, puis on recommence.
+            }
+            await Task.Delay(TimeSpan.FromSeconds(2 * essai));
+        }
+    }
+
+    // Renvoie null sur 404, lève une exception sur les autres erreurs.
+    private static async Task<T?> LireOuNullAsync<T>(HttpResponseMessage reponse,
         System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) where T : class
     {
-        var reponse = await requete;
         if (reponse.StatusCode == HttpStatusCode.NotFound) return null;
         reponse.EnsureSuccessStatusCode();
         return await reponse.Content.ReadFromJsonAsync(type);

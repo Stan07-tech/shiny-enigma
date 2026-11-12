@@ -24,6 +24,56 @@ public sealed class ListeServiceApiTests(SiteDeTest site) : IClassFixture<SiteDe
         return client;
     }
 
+    // Simule un réseau capricieux : les "echecs" premières requêtes échouent
+    // (erreur réseau, ou réponse 503 "service indisponible" d'un serveur qui démarre).
+    private sealed class ReseauCapricieux(HttpMessageHandler serveur, int echecs, bool erreur503) : DelegatingHandler(serveur)
+    {
+        public int Appels;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage requete, CancellationToken annulation)
+        {
+            if (Interlocked.Increment(ref Appels) <= echecs)
+            {
+                return erreur503
+                    ? Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable))
+                    : throw new HttpRequestException("Réseau indisponible (simulé)");
+            }
+            return base.SendAsync(requete, annulation);
+        }
+    }
+
+    private ListeServiceApi TelephoneSur(HttpMessageHandler reseau) =>
+        new(new HttpClient(reseau) { BaseAddress = new Uri("http://localhost/") },
+            ListeServiceApi.CreerConnexionHub(new Uri("http://localhost/"), o => o.HttpMessageHandlerFactory = _ => site.Server.CreateHandler()));
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Lecture_ReessaieQuandLeServeurNeRepondPasEncore(bool erreur503)
+    {
+        var code = (await NouveauTelephone().CreerAsync("Maison")).Code;
+        var reseau = new ReseauCapricieux(site.Server.CreateHandler(), echecs: 2, erreur503);
+        var telephone = TelephoneSur(reseau);
+        clients.Add(telephone);
+
+        var liste = await telephone.ObtenirAsync(code);
+
+        Assert.Equal("Maison", liste?.Nom);
+        Assert.Equal(3, reseau.Appels);   // 2 échecs, puis la 3e tentative réussit
+    }
+
+    [Fact]
+    public async Task Ajout_NEstPasReessaye_PourNePasCreerDeDoublon()
+    {
+        var code = (await NouveauTelephone().CreerAsync("Maison")).Code;
+        var reseau = new ReseauCapricieux(site.Server.CreateHandler(), echecs: 1, erreur503: false);
+        var telephone = TelephoneSur(reseau);
+        clients.Add(telephone);
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => telephone.AjouterAsync(code, new Article { Nom = "Pain" }));
+        Assert.Equal(1, reseau.Appels);
+    }
+
     [Fact]
     public async Task CreerObtenirEtResumes()
     {

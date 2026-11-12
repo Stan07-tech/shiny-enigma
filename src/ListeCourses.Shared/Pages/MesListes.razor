@@ -13,6 +13,10 @@
 @if (listes is null)
 {
     <p class="vide">@(erreur ?? "Chargement…")</p>
+    @if (erreur is not null)
+    {
+        <p class="vide"><button class="principal" @onclick="Charger">Réessayer</button></p>
+    }
 }
 else
 {
@@ -56,7 +60,9 @@ else
     private string? saisieRejoindre;
     private string? erreur;
 
-    protected override Task OnInitializedAsync() => Executer(async () =>
+    protected override Task OnInitializedAsync() => Charger();
+
+    private Task Charger() => Executer(async () =>
     {
         var codes = await ListesConnues.CodesAsync();
         var resumes = await Service.ResumesAsync(codes);
@@ -100,9 +106,10 @@ else
             erreur = null;
             await action();
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        catch (Exception e)
         {
-            erreur = "Connexion au serveur impossible. Vérifiez votre accès à Internet.";
+            // Toutes les exceptions : sur Android, les erreurs réseau n'ont pas toujours le même type.
+            erreur = $"Le serveur ne répond pas. Vérifiez votre connexion Internet, puis réessayez. ({e.GetType().Name})";
         }
     }
 }

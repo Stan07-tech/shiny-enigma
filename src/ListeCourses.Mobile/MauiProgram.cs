@@ -19,8 +19,10 @@ public static class MauiProgram
 
 		// L'appli n'a plus de base locale : elle utilise l'API du serveur
 		// (HttpClient) et reçoit les modifications en temps réel (SignalR).
+		// 30 s par requête (les lectures sont réessayées 3 fois) : le temps qu'un
+		// serveur Azure en veille se réveille.
 		builder.Services.AddSingleton<IListeService>(_ => new ListeServiceApi(
-			new HttpClient { BaseAddress = Configuration.AdresseServeur, Timeout = TimeSpan.FromSeconds(20) },
+			new HttpClient { BaseAddress = Configuration.AdresseServeur, Timeout = TimeSpan.FromSeconds(30) },
 			ListeServiceApi.CreerConnexionHub(Configuration.AdresseServeur)));
 		builder.Services.AddScoped<IListesConnues, ListesConnuesNavigateur>();
 		builder.Services.AddSingleton<IPartage, PartageMobile>();

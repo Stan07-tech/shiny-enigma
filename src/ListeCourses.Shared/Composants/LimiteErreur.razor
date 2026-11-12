@@ -1,0 +1,29 @@
+@* Filet de sécurité autour des pages : si une erreur imprévue survient,
+   on affiche un message lisible avec un bouton "Réessayer" au lieu de
+   laisser la page planter (comme un bloc QUAND EXCEPTION en WinDev). *@
+
+<ErrorBoundary @ref="limite">
+    <ChildContent>
+        @ChildContent
+    </ChildContent>
+    <ErrorContent Context="exception">
+        <div class="erreur-globale" role="alert">
+            <p><strong>Oups, un problème est survenu.</strong></p>
+            <p>Vérifiez votre connexion Internet, puis réessayez. Si le serveur était en veille, il peut mettre jusqu'à une minute à répondre.</p>
+            <button class="principal" @onclick="Reessayer">Réessayer</button>
+            <p class="detail">Détail : @exception.GetType().Name</p>
+        </div>
+    </ErrorContent>
+</ErrorBoundary>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private ErrorBoundary? limite;
+
+    // Appelé à chaque changement de page : on repart d'un état propre.
+    protected override void OnParametersSet() => limite?.Recover();
+
+    // Recover() recrée les pages, qui rechargent donc leurs données.
+    private void Reessayer() => limite?.Recover();
+}

@@ -36,3 +36,7 @@ li a.nom { font-weight: 500; }
 .partage button { padding: 6px 12px; }
 .code strong { color: var(--texte); letter-spacing: .05em; }
 .info { color: var(--accent); }
+.erreur-globale { background: var(--carte); border: 1px solid var(--erreur); border-radius: 12px; padding: 16px; margin-top: 16px; }
+.erreur-globale p { margin: 0 0 12px; }
+.erreur-globale .detail { margin: 12px 0 0; font-size: .75rem; color: var(--doux); }
+.reessayer { margin-top: 8px; }

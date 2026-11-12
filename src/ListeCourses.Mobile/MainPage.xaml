@@ -3,8 +3,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:local="clr-namespace:ListeCourses.Mobile"
              xmlns:components="clr-namespace:ListeCourses.Mobile.Components"
-             x:Class="ListeCourses.Mobile.MainPage">
+             x:Class="ListeCourses.Mobile.MainPage"
+             SafeAreaEdges="All">
 
+    <!-- SafeAreaEdges="All" : la page reste entre la barre d'état et la barre de navigation
+         d'Android, au lieu de passer dessous (affichage "bord à bord" d'Android 15+). -->
     <BlazorWebView x:Name="blazorWebView" HostPage="wwwroot/index.html">
         <BlazorWebView.RootComponents>
             <RootComponent Selector="#app" ComponentType="{x:Type components:Routes}" />
