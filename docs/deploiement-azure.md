@@ -157,13 +157,17 @@ Puis, depuis ce dossier :
 ```powershell
 Remove-Item publie, site.zip -Recurse -Force -ErrorAction SilentlyContinue
 dotnet publish src/ListeCourses -c Release -r linux-x64 --self-contained false -o publie
-Compress-Archive -Path publie\* -DestinationPath site.zip -Force
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[IO.Compression.ZipFile]::CreateFromDirectory("$PWD\publie", "$PWD\site.zip")
 az webapp deploy --resource-group $rg --name $app --src-path site.zip --type zip
 ```
 
 - La première ligne supprime le résultat d'une publication précédente.
 - `-r linux-x64` ne garde que ce qui sert sur le serveur Linux d'Azure, ce qui réduit
   le ZIP d'environ 43 Mo à 19 Mo.
+- Le ZIP est créé avec la classe .NET `ZipFile` plutôt qu'avec `Compress-Archive`.
+  Sous Windows PowerShell 5.1, `Compress-Archive` écrit des chemins avec `\`,
+  que le serveur Linux refuse (erreur `Kudu Status : 400`).
 
 Si l'envoi échoue avec `ConnectionResetError` ou `Connection aborted`, la connexion
 a été coupée pendant l'envoi. Relancez simplement la dernière commande : le premier
