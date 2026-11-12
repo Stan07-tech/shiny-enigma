@@ -155,10 +155,19 @@ La commande `ls` doit alors afficher `src`, `docs`, `tests` et `README.md`.
 Puis, depuis ce dossier :
 
 ```powershell
-dotnet publish src/ListeCourses -c Release -o publie
+Remove-Item publie, site.zip -Recurse -Force -ErrorAction SilentlyContinue
+dotnet publish src/ListeCourses -c Release -r linux-x64 --self-contained false -o publie
 Compress-Archive -Path publie\* -DestinationPath site.zip -Force
 az webapp deploy --resource-group $rg --name $app --src-path site.zip --type zip
 ```
+
+- La première ligne supprime le résultat d'une publication précédente.
+- `-r linux-x64` ne garde que ce qui sert sur le serveur Linux d'Azure, ce qui réduit
+  le ZIP d'environ 43 Mo à 19 Mo.
+
+Si l'envoi échoue avec `ConnectionResetError` ou `Connection aborted`, la connexion
+a été coupée pendant l'envoi. Relancez simplement la dernière commande : le premier
+essai réveille souvent le service de déploiement, qui était en veille.
 
 Recommencez ces trois commandes à chaque nouvelle version du site.
 
