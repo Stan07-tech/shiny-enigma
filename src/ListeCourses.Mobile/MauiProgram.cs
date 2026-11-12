@@ -24,7 +24,10 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IListeService>(_ => new ListeServiceApi(
 			new HttpClient { BaseAddress = Configuration.AdresseServeur, Timeout = TimeSpan.FromSeconds(30) },
 			ListeServiceApi.CreerConnexionHub(Configuration.AdresseServeur)));
+		builder.Services.AddSingleton<IRecetteService>(_ => new RecetteServiceApi(
+			new HttpClient { BaseAddress = Configuration.AdresseServeur, Timeout = TimeSpan.FromSeconds(30) }));
 		builder.Services.AddScoped<IListesConnues, ListesConnuesNavigateur>();
+		builder.Services.AddScoped<IRecettesConnues, RecettesConnuesNavigateur>();
 		builder.Services.AddSingleton<IPartage, PartageMobile>();
 
 #if DEBUG

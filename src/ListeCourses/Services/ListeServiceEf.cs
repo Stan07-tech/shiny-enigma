@@ -89,6 +89,46 @@ public class ListeServiceEf(IDbContextFactory<CoursesDbContext> dbFactory, Notif
         return nouvel;
     }
 
+    // Plusieurs INSERT dans une seule transaction (SaveChanges), une seule notification.
+    public async Task<ResultatAjout?> AjouterPlusieursAsync(string code, IEnumerable<Article> articles)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var listeId = await IdListeAsync(db, code);
+        if (listeId is null) return null;
+
+        // Noms déjà présents et non achetés : on ne les ajoute pas une deuxième fois.
+        var presents = new HashSet<string>(
+            await db.Articles.Where(a => a.ListeId == listeId && !a.Achete).Select(a => a.Nom).ToListAsync(),
+            StringComparer.CurrentCultureIgnoreCase);
+
+        int ajoutes = 0, dejaPresents = 0;
+        foreach (var article in articles.Where(a => !string.IsNullOrWhiteSpace(a.Nom)))
+        {
+            var nom = Tronquer(article.Nom.Trim(), 100);
+            if (!presents.Add(nom))
+            {
+                dejaPresents++;
+                continue;
+            }
+
+            db.Articles.Add(new Article
+            {
+                ListeId = listeId.Value,
+                Nom = nom,
+                Quantite = Math.Max(1, article.Quantite),
+                Rayon = string.IsNullOrWhiteSpace(article.Rayon) ? null : Tronquer(article.Rayon.Trim(), 50),
+            });
+            ajoutes++;
+        }
+
+        if (ajoutes > 0)
+        {
+            await db.SaveChangesAsync();
+            notificateur.Signaler(code);
+        }
+        return new ResultatAjout(ajoutes, dejaPresents);
+    }
+
     // UPDATE Articles SET Achete = ~Achete WHERE Id = @id AND ListeId = (liste du code)
     public async Task<Article?> BasculerAsync(string code, int id)
     {

@@ -7,6 +7,8 @@ mises à jour **en temps réel** entre plusieurs personnes, consultables rayon p
   `https://…/l/K7MZ2QH9XA` suffit pour y accéder, sans compte.
 - Chaque appareil retient les listes qu'il a créées ou ouvertes (« Mes listes »).
 - Quand quelqu'un ajoute ou coche un article, les écrans des autres se mettent à jour seuls.
+- Onglet **Recettes** : des recettes partageables de la même façon (`/r/CODE`), dont on
+  ajoute tout ou partie des ingrédients à une ou plusieurs listes, en un clic.
 
 Trois interfaces partagent le même code :
 - **Site web Blazor** : l'interface est écrite en C# ;
@@ -42,7 +44,11 @@ Les pages ne connaissent que l'interface `IListeService`, réalisée deux fois :
 | `Shared/Services/ListeServiceApi.cs` | Client HTTP + SignalR (appli mobile) | Appels de webservice |
 | `Shared/Pages/MesListes.razor` | Accueil : mes listes, créer, rejoindre | Fenêtre principale |
 | `Shared/Pages/PageListe.razor` | Une liste, tous les articles ou un rayon | Fenêtre / page WEBDEV |
-| `ListeCourses/Data/CoursesDbContext.cs` | Accès à la base (EF Core) | `HOuvreConnexion` + analyse |
+| `Shared/Pages/MesRecettes.razor`, `PageRecette.razor` | Recettes : ingrédients, préparation, ajout aux listes | Fenêtres |
+| `Shared/Composants/Onglets.razor` | Menu « Listes / Recettes » | Menu / onglets |
+| `Shared/Composants/LimiteErreur.razor` | Filet de sécurité en cas d'erreur | `QUAND EXCEPTION` |
+| `ListeCourses/Data/CoursesDbContext.cs` | Accès à la base : listes (EF Core) | `HOuvreConnexion` + analyse |
+| `ListeCourses/Data/RecettesDbContext.cs` | Accès à la base : recettes | Seconde analyse, même base |
 | `ListeCourses/Services/ListeServiceEf.cs` | Logique métier côté serveur | Collection de procédures globales |
 | `ListeCourses/Services/HubListes.cs` | Hub SignalR (temps réel) | — |
 | `ListeCourses/Program.cs` | Configuration du site + API REST | Code du projet / webservice |
@@ -120,6 +126,13 @@ d'un article ne suffit pas pour le modifier.
 | PATCH | `/api/listes/{code}/articles/{id}/basculer` | Cocher / décocher |
 | DELETE | `/api/listes/{code}/articles/{id}` | Supprimer un article |
 | DELETE | `/api/listes/{code}/articles/achetes` | Retirer les articles achetés |
+| POST | `/api/listes/{code}/articles/lot` | Ajouter plusieurs articles (sans doublons) |
+| POST | `/api/recettes` | Créer une recette |
+| GET | `/api/recettes/{code}` | Recette avec ses ingrédients |
+| POST | `/api/recettes/resumes` | Résumés de plusieurs recettes |
+| PUT | `/api/recettes/{code}` | Modifier le nom et la préparation |
+| POST | `/api/recettes/{code}/ingredients` | Ajouter un ingrédient |
+| DELETE | `/api/recettes/{code}/ingredients/{id}` | Supprimer un ingrédient |
 
 Temps réel : hub SignalR `/hub/listes`, méthodes `Suivre(code)` / `NePlusSuivre(code)`,
 message reçu `ListeModifiee(code)`.
@@ -128,5 +141,7 @@ message reçu `ListeModifiee(code)`.
 
 - Qui possède le lien d'une liste peut la modifier : ne le partagez qu'avec les bonnes personnes.
 - Pas de suppression définitive d'une liste (« ✕ » la retire seulement de « Mes listes »).
-- Les tables sont créées par `EnsureCreated()` : pour faire évoluer leur structure
-  sans perdre les données, il faudra passer aux **migrations** EF Core.
+- Les tables sont créées par `EnsureCreated()` (listes) et `CreerTablesSiAbsentes()`
+  (recettes, ajoutées dans une base existante) : pour faire évoluer la structure d'une
+  table existante sans perdre les données, il faudra passer aux **migrations** EF Core.
+- Ajout d'ingrédients : « Lait » et « Lait (50 cl) » sont considérés comme deux articles différents.

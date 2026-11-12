@@ -24,6 +24,11 @@ public interface IListeService
     // null si le nom est vide ou si la liste n'existe pas.
     Task<Article?> AjouterAsync(string code, Article article);
 
+    // Ajoute plusieurs articles d'un coup (ingrédients d'une recette).
+    // Un article déjà présent et non acheté (même nom) n'est pas ajouté en double.
+    // null si la liste n'existe pas.
+    Task<ResultatAjout?> AjouterPlusieursAsync(string code, IEnumerable<Article> articles);
+
     // null / false si l'article n'existe pas dans CETTE liste.
     Task<Article?> BasculerAsync(string code, int id);
     Task<bool> SupprimerAsync(string code, int id);

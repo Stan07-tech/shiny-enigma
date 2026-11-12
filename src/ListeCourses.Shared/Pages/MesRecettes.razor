@@ -1,0 +1,114 @@
+@page "/recettes"
+@inject IRecetteService Service
+@inject IRecettesConnues RecettesConnues
+@inject NavigationManager Navigation
+
+@* Les recettes connues de cet appareil, la création d'une recette et
+   l'accès à une recette partagée (par son code ou son lien). *@
+
+<PageTitle>Mes recettes</PageTitle>
+
+<h1>📖 Mes recettes</h1>
+
+@if (recettes is null)
+{
+    <p class="vide">@(erreur ?? "Chargement…")</p>
+    @if (erreur is not null)
+    {
+        <p class="vide"><button class="principal" @onclick="Charger">Réessayer</button></p>
+    }
+}
+else
+{
+    <ul>
+        @if (recettes.Count == 0)
+        {
+            <li class="vide">Aucune recette pour l'instant. Créez-en une, ou rejoignez celle qu'on vous a partagée.</li>
+        }
+        @foreach (var r in recettes)
+        {
+            <li @key="r.Code">
+                <a class="nom" href="r/@r.Code">@r.Nom</a>
+                <span class="rayon">@r.NbIngredients ingrédient@(r.NbIngredients > 1 ? "s" : "")</span>
+                <button class="suppr" title="Retirer de mes recettes (la recette n'est pas supprimée)"
+                        @onclick="() => Oublier(r.Code)">✕</button>
+            </li>
+        }
+    </ul>
+}
+
+<h2>Nouvelle recette</h2>
+<form class="ajout" @onsubmit="Creer">
+    <input class="nom-saisie" placeholder="Nom (ex. : Crêpes)" maxlength="100" @bind="nomNouvelle" />
+    <button class="principal" type="submit">Créer</button>
+</form>
+
+<h2>Rejoindre une recette</h2>
+<form class="ajout" @onsubmit="Rejoindre">
+    <input class="nom-saisie" placeholder="Code ou lien reçu" autocomplete="off" @bind="saisieRejoindre" />
+    <button type="submit">Rejoindre</button>
+</form>
+
+@if (erreur is not null && recettes is not null)
+{
+    <p class="erreur">@erreur</p>
+}
+
+@code {
+    private List<RecetteResume>? recettes;
+    private string? nomNouvelle;
+    private string? saisieRejoindre;
+    private string? erreur;
+
+    protected override Task OnInitializedAsync() => Charger();
+
+    private Task Charger() => Executer(async () =>
+    {
+        var codes = await RecettesConnues.CodesAsync();
+        var resumes = await Service.ResumesAsync(codes);
+        recettes = resumes.OrderBy(r => codes.IndexOf(r.Code)).ToList();
+    });
+
+    private Task Creer() => Executer(async () =>
+    {
+        var recette = await Service.CreerAsync(nomNouvelle ?? "");
+        await RecettesConnues.AjouterAsync(recette.Code);
+        Navigation.NavigateTo($"r/{recette.Code}");
+    });
+
+    private Task Rejoindre() => Executer(async () =>
+    {
+        var code = CodeListe.Extraire(saisieRejoindre, "/r/");
+        if (code is null)
+        {
+            erreur = "Code ou lien invalide.";
+            return;
+        }
+        if (await Service.ObtenirAsync(code) is null)
+        {
+            erreur = "Aucune recette ne correspond à ce code.";
+            return;
+        }
+        Navigation.NavigateTo($"r/{code}");
+    });
+
+    private async Task Oublier(string code)
+    {
+        await RecettesConnues.RetirerAsync(code);
+        recettes?.RemoveAll(r => r.Code == code);
+    }
+
+    private async Task Executer(Func<Task> action)
+    {
+        try
+        {
+            erreur = null;
+            await action();
+        }
+        catch (Exception e)
+        {
+            // Toutes les exceptions : sur Android, les erreurs réseau n'ont pas toujours le même type.
+            erreur = $"Le serveur ne répond pas. Vérifiez votre connexion Internet, puis réessayez. ({e.GetType().Name})";
+        }
+    }
+}

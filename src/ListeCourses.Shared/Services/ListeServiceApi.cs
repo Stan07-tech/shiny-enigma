@@ -4,6 +4,7 @@ using ListeCourses.Models;
 using Microsoft.AspNetCore.Http.Connections.Client;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
+using static ListeCourses.Services.OutilsHttp;
 
 namespace ListeCourses.Services;
 
@@ -11,8 +12,6 @@ namespace ListeCourses.Services;
 // l'API REST du serveur, et les notifications arrivent par SignalR.
 public sealed class ListeServiceApi(HttpClient http, HubConnection hub) : IListeService, IAsyncDisposable
 {
-    private const int NombreEssais = 3;
-
     private readonly SemaphoreSlim verrouConnexion = new(1, 1);
     private readonly List<(string Code, Func<Task> Rappel)> abonnements = [];
     private bool gestionnairesInstalles;
@@ -54,6 +53,11 @@ public sealed class ListeServiceApi(HttpClient http, HubConnection hub) : IListe
             await http.PostAsJsonAsync($"api/listes/{code}/articles", article, JsonListes.Default.Article),
             JsonListes.Default.Article);
     }
+
+    public async Task<ResultatAjout?> AjouterPlusieursAsync(string code, IEnumerable<Article> articles) =>
+        await LireOuNullAsync(
+            await http.PostAsJsonAsync($"api/listes/{code}/articles/lot", articles.ToList(), JsonListes.Default.ListArticle),
+            JsonListes.Default.ResultatAjout);
 
     public async Task<Article?> BasculerAsync(string code, int id) =>
         await LireOuNullAsync(await http.PatchAsync($"api/listes/{code}/articles/{id}/basculer", null), JsonListes.Default.Article);
@@ -135,35 +139,6 @@ public sealed class ListeServiceApi(HttpClient http, HubConnection hub) : IListe
         {
             try { await rappel(); } catch (Exception) { }
         }
-    }
-
-    // Lecture avec nouvelles tentatives. Au réveil du serveur (offre gratuite d'Azure :
-    // site en veille, base en pause), les premières requêtes peuvent échouer ou expirer.
-    // On ne réessaie que les lectures : réessayer un ajout pourrait le faire en double.
-    private static async Task<HttpResponseMessage> AvecReessaisAsync(Func<Task<HttpResponseMessage>> requete)
-    {
-        for (var essai = 1; ; essai++)
-        {
-            try
-            {
-                var reponse = await requete();
-                if ((int)reponse.StatusCode < 500 || essai == NombreEssais) return reponse;
-            }
-            catch (Exception) when (essai < NombreEssais)
-            {
-                // Erreur réseau ou délai dépassé : on attend un peu, puis on recommence.
-            }
-            await Task.Delay(TimeSpan.FromSeconds(2 * essai));
-        }
-    }
-
-    // Renvoie null sur 404, lève une exception sur les autres erreurs.
-    private static async Task<T?> LireOuNullAsync<T>(HttpResponseMessage reponse,
-        System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) where T : class
-    {
-        if (reponse.StatusCode == HttpStatusCode.NotFound) return null;
-        reponse.EnsureSuccessStatusCode();
-        return await reponse.Content.ReadFromJsonAsync(type);
     }
 
     public async ValueTask DisposeAsync() => await hub.DisposeAsync();

@@ -5,7 +5,7 @@ namespace ListeCourses.Mobile;
 // Partage sur téléphone : ouvre le menu natif d'Android (SMS, WhatsApp, e-mail...).
 public sealed class PartageMobile : IPartage
 {
-    public string Lien(string code) => new Uri(Configuration.AdresseServeur, $"l/{code}").ToString();
+    public string Lien(string chemin) => new Uri(Configuration.AdresseServeur, chemin).ToString();
 
     public async Task<bool> PartagerAsync(string titre, string lien)
     {

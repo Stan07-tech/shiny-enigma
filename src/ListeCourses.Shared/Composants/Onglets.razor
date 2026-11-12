@@ -1,0 +1,27 @@
+@implements IDisposable
+@inject NavigationManager Navigation
+
+@* Menu principal : deux onglets, "Listes" et "Recettes". *@
+<nav class="onglets" aria-label="Menu principal">
+    <a href="" class="@(SurRecettes ? null : "actif")">🛒 Listes</a>
+    <a href="recettes" class="@(SurRecettes ? "actif" : null)">📖 Recettes</a>
+</nav>
+
+@code {
+    private bool SurRecettes
+    {
+        get
+        {
+            var chemin = Navigation.ToBaseRelativePath(Navigation.Uri);
+            return chemin.StartsWith("recettes") || chemin.StartsWith("r/");
+        }
+    }
+
+    // Ce composant n'a pas de paramètre : il faut lui dire de se redessiner
+    // quand on change de page, pour mettre à jour l'onglet actif.
+    protected override void OnInitialized() => Navigation.LocationChanged += SurChangement;
+
+    private void SurChangement(object? sender, LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Navigation.LocationChanged -= SurChangement;
+}

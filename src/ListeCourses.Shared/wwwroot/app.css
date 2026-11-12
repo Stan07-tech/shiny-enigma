@@ -40,3 +40,14 @@ li a.nom { font-weight: 500; }
 .erreur-globale p { margin: 0 0 12px; }
 .erreur-globale .detail { margin: 12px 0 0; font-size: .75rem; color: var(--doux); }
 .reessayer { margin-top: 8px; }
+.onglets { display: flex; gap: 4px; margin: 0 0 16px; border-bottom: 1px solid var(--bord); }
+.onglets a { padding: 10px 14px; color: var(--doux); text-decoration: none; border-bottom: 3px solid transparent; margin-bottom: -1px; font-weight: 500; }
+.onglets a.actif { color: var(--accent); border-bottom-color: var(--accent); }
+.quantite-texte { width: 110px; }
+.quantite-ingredient { color: var(--doux); }
+.aide { font-size: .9rem; color: var(--doux); }
+button.lien { background: none; border: none; padding: 0; color: var(--accent); text-decoration: underline; font-size: inherit; }
+.choix-listes li { padding: 0; }
+.choix-listes label { display: flex; align-items: center; gap: 12px; padding: 12px 14px; width: 100%; cursor: pointer; }
+.champ-large, textarea { width: 100%; margin-bottom: 8px; font: inherit; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--bord); background: var(--carte); color: var(--texte); }
+button:disabled { opacity: .5; cursor: default; }

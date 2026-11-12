@@ -256,7 +256,7 @@ else
 
     private Task Partager() => Executer(async () =>
     {
-        var copie = await Partage.PartagerAsync(liste!.Nom, Partage.Lien(liste.Code));
+        var copie = await Partage.PartagerAsync(liste!.Nom, Partage.Lien($"l/{liste.Code}"));
         info = copie ? "Lien copié !" : null;
     });
 

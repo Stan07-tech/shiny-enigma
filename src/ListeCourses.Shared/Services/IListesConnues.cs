@@ -12,15 +12,23 @@ public interface IListesConnues
     Task RetirerAsync(string code);
 }
 
-// Stockage dans le localStorage du navigateur. Fonctionne aussi dans l'appli
-// mobile, car la page Blazor y est affichée par un navigateur intégré (WebView).
-public sealed class ListesConnuesNavigateur(IJSRuntime js) : IListesConnues
+// Même chose pour les recettes.
+public interface IRecettesConnues
 {
-    private const string Cle = "listes-connues";
+    Task<List<string>> CodesAsync();
+    Task AjouterAsync(string code);
+    Task RetirerAsync(string code);
+}
 
+// Stockage de codes dans le localStorage du navigateur. Fonctionne aussi dans
+// l'appli mobile, car la page Blazor y est affichée par un navigateur intégré (WebView).
+// Classe "abstract" : elle ne sert que de base aux deux classes ci-dessous,
+// qui ne diffèrent que par la clé de stockage.
+public abstract class CodesConnusNavigateur(IJSRuntime js, string cle)
+{
     public async Task<List<string>> CodesAsync()
     {
-        var json = await js.InvokeAsync<string?>("localStorage.getItem", Cle);
+        var json = await js.InvokeAsync<string?>("localStorage.getItem", cle);
         if (string.IsNullOrEmpty(json)) return [];
         try { return JsonSerializer.Deserialize(json, JsonListes.Default.ListString) ?? []; }
         catch (JsonException) { return []; }
@@ -30,7 +38,7 @@ public sealed class ListesConnuesNavigateur(IJSRuntime js) : IListesConnues
     {
         var codes = await CodesAsync();
         if (codes.Contains(code)) return;
-        codes.Insert(0, code);   // la plus récente en premier
+        codes.Insert(0, code);   // le plus récent en premier
         await EnregistrerAsync(codes);
     }
 
@@ -41,5 +49,9 @@ public sealed class ListesConnuesNavigateur(IJSRuntime js) : IListesConnues
     }
 
     private Task EnregistrerAsync(List<string> codes) =>
-        js.InvokeVoidAsync("localStorage.setItem", Cle, JsonSerializer.Serialize(codes, JsonListes.Default.ListString)).AsTask();
+        js.InvokeVoidAsync("localStorage.setItem", cle, JsonSerializer.Serialize(codes, JsonListes.Default.ListString)).AsTask();
 }
+
+public sealed class ListesConnuesNavigateur(IJSRuntime js) : CodesConnusNavigateur(js, "listes-connues"), IListesConnues;
+
+public sealed class RecettesConnuesNavigateur(IJSRuntime js) : CodesConnusNavigateur(js, "recettes-connues"), IRecettesConnues;

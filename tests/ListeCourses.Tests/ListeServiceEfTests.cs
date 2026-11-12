@@ -222,6 +222,39 @@ public sealed class ListeServiceEfTests : IDisposable
         Assert.Single((await service.ArticlesAsync(bbq.Code))!);   // l'autre liste n'est pas touchée
     }
 
+    // ----- Ajout en lot (ingrédients d'une recette) -----
+
+    [Fact]
+    public async Task AjouterPlusieursAsync_AjouteSansDoublonsEtPrevientUneSeuleFois()
+    {
+        var code = (await service.CreerAsync("Maison")).Code;
+        await Ajouter(code, "farine (250 g)", null);            // déjà présent (majuscules différentes)
+        var lait = await Ajouter(code, "Lait", "Frais");
+        await service.BasculerAsync(code, lait.Id);              // acheté : le racheter est permis
+        var notifications = 0;
+        await using var suivi = await service.SuivreAsync(code, () => { Interlocked.Increment(ref notifications); return Task.CompletedTask; });
+
+        var resultat = await service.AjouterPlusieursAsync(code,
+        [
+            new Article { Nom = "Farine (250 g)", Rayon = "Épicerie" },
+            new Article { Nom = "Lait", Rayon = "Frais" },
+            new Article { Nom = "Œufs (4)", Rayon = "Frais" },
+            new Article { Nom = "œufs (4)" },                    // doublon dans le lot lui-même
+            new Article { Nom = "  " },                          // ignoré
+        ]);
+
+        Assert.Equal(new ResultatAjout(Ajoutes: 2, DejaPresents: 2), resultat);
+        var noms = (await service.ArticlesAsync(code))!.Select(a => a.Nom).Order().ToList();
+        Assert.Equal(["farine (250 g)", "Lait", "Lait", "Œufs (4)"], noms);
+        Assert.Equal(1, notifications);
+    }
+
+    [Fact]
+    public async Task AjouterPlusieursAsync_ListeInconnue_RenvoieNull()
+    {
+        Assert.Null(await service.AjouterPlusieursAsync("AAAAAAAAAA", [new Article { Nom = "Pain" }]));
+    }
+
     // ----- Temps réel -----
 
     [Fact]

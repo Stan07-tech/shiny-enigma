@@ -1,0 +1,263 @@
+@page "/r/{Code}"
+@inject IRecetteService Recettes
+@inject IListeService Listes
+@inject IRecettesConnues RecettesConnues
+@inject IListesConnues ListesConnues
+@inject IPartage Partage
+
+@* Une recette : ses ingrédients, sa préparation, et l'ajout des ingrédients
+   choisis à une ou plusieurs listes de courses. *@
+
+<p class="retour"><a href="recettes">← Mes recettes</a></p>
+
+@if (introuvable)
+{
+    <PageTitle>Recette introuvable</PageTitle>
+    <h1>Recette introuvable</h1>
+    <p class="vide">Aucune recette ne correspond à ce lien. Vérifiez le code reçu.</p>
+}
+else if (recette is null)
+{
+    <p class="vide">@(erreur ?? "Chargement…")</p>
+    @if (erreur is not null)
+    {
+        <p class="vide"><button class="principal" @onclick="Recharger">Réessayer</button></p>
+    }
+}
+else
+{
+    <PageTitle>@recette.Nom</PageTitle>
+
+    <h1>📖 @recette.Nom</h1>
+
+    <div class="partage">
+        <button @onclick="Partager">Partager la recette</button>
+        <span class="code" title="Code de la recette">Code : <strong>@recette.Code</strong></span>
+    </div>
+
+    @if (erreur is not null)
+    {
+        <p class="erreur">@erreur</p>
+    }
+
+    @* ----- Ingrédients ----- *@
+    <h2>Ingrédients</h2>
+    <form class="ajout" @onsubmit="AjouterIngredient">
+        <input class="nom-saisie" placeholder="Ingrédient (ex. : farine)" maxlength="100" autocomplete="off"
+               @bind="nouvel.Nom" />
+        <input class="quantite-texte" placeholder="Quantité" maxlength="30" aria-label="Quantité (ex. : 200 g)"
+               @bind="nouvel.Quantite" />
+        <input class="rayon-saisie" placeholder="Rayon" maxlength="50" @bind="nouvel.Rayon" />
+        <button class="principal" type="submit">Ajouter</button>
+    </form>
+
+    <ul>
+        @if (recette.Ingredients.Count == 0)
+        {
+            <li class="vide">Aucun ingrédient pour l'instant.</li>
+        }
+        @foreach (var i in recette.Ingredients)
+        {
+            <li @key="i.Id">
+                <input type="checkbox" checked="@choisis.Contains(i.Id)" @onchange="() => Choisir(i.Id)"
+                       aria-label="Ajouter @i.Nom aux listes" />
+                <span class="nom">@i.Nom<span class="quantite-ingredient">@(i.Quantite is null ? "" : $" · {i.Quantite}")</span></span>
+                <span class="rayon">@i.Rayon</span>
+                <button class="suppr" title="Supprimer l'ingrédient" @onclick="() => SupprimerIngredient(i.Id)">✕</button>
+            </li>
+        }
+    </ul>
+
+    @* ----- Ajout aux listes ----- *@
+    @if (recette.Ingredients.Count > 0)
+    {
+        <h2>Ajouter aux listes de courses</h2>
+        <p class="aide">
+            Les ingrédients cochés ci-dessus seront ajoutés.
+            <button class="lien" @onclick="ToutCocher">Tout cocher</button> ·
+            <button class="lien" @onclick="() => choisis.Clear()">Tout décocher</button>
+        </p>
+
+        @if (listes is null || listes.Count == 0)
+        {
+            <p class="vide">Aucune liste sur cet appareil. Créez-en une dans l'onglet « Listes ».</p>
+        }
+        else
+        {
+            <ul class="choix-listes">
+                @foreach (var l in listes)
+                {
+                    <li @key="l.Code">
+                        <label>
+                            <input type="checkbox" checked="@listesChoisies.Contains(l.Code)" @onchange="() => ChoisirListe(l.Code)" />
+                            @l.Nom
+                        </label>
+                    </li>
+                }
+            </ul>
+            <p>
+                <button class="principal" disabled="@(choisis.Count == 0 || listesChoisies.Count == 0)" @onclick="AjouterAuxListes">
+                    Ajouter @Pluriel(choisis.Count, "ingrédient") à @Pluriel(listesChoisies.Count, "liste")
+                </button>
+            </p>
+            @foreach (var message in resultats)
+            {
+                <p class="info">@message</p>
+            }
+        }
+    }
+
+    @* ----- Nom et préparation ----- *@
+    <h2>Nom et préparation</h2>
+    <input class="champ-large" maxlength="100" aria-label="Nom de la recette" @bind="nomEdite" />
+    <textarea rows="8" placeholder="Étapes de la recette…" @bind="instructionsEditees"></textarea>
+    <p>
+        <button @onclick="Enregistrer">Enregistrer</button>
+        @if (enregistre)
+        {
+            <span class="info"> Enregistré.</span>
+        }
+    </p>
+}
+
+@code {
+    [Parameter] public string Code { get; set; } = "";
+
+    private RecetteDetail? recette;
+    private List<ListeResume>? listes;
+    private Ingredient nouvel = new();
+    private readonly HashSet<int> choisis = [];              // ingrédients cochés
+    private readonly HashSet<string> listesChoisies = [];    // listes cochées
+    private readonly List<string> resultats = [];
+    private string? nomEdite;
+    private string? instructionsEditees;
+    private string? erreur;
+    private bool introuvable;
+    private bool enregistre;
+    private string? codeCharge;
+
+    private static string Pluriel(int n, string mot) => $"{n} {mot}{(n > 1 ? "s" : "")}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Code == codeCharge) return;
+        codeCharge = Code;
+        recette = null;
+        introuvable = false;
+        erreur = null;
+        resultats.Clear();
+
+        await Executer(async () =>
+        {
+            var code = CodeListe.Extraire(Code, "/r/");
+            recette = code is null ? null : await Recettes.ObtenirAsync(code);
+            if (recette is null)
+            {
+                introuvable = true;
+                return;
+            }
+
+            await RecettesConnues.AjouterAsync(recette.Code);
+            nomEdite = recette.Nom;
+            instructionsEditees = recette.Instructions;
+            ToutCocher();
+
+            // Les listes de cet appareil, pour choisir où ajouter les ingrédients.
+            var codes = await ListesConnues.CodesAsync();
+            listes = (await Listes.ResumesAsync(codes)).OrderBy(l => codes.IndexOf(l.Code)).ToList();
+            listesChoisies.Clear();
+            if (listes.Count == 1) listesChoisies.Add(listes[0].Code);   // une seule liste : cochée d'office
+        });
+    }
+
+    private async Task Recharger()
+    {
+        codeCharge = null;
+        await OnParametersSetAsync();
+    }
+
+    private async Task ChargerRecette() => recette = await Recettes.ObtenirAsync(recette!.Code) ?? recette;
+
+    private void ToutCocher()
+    {
+        choisis.Clear();
+        foreach (var i in recette!.Ingredients) choisis.Add(i.Id);
+    }
+
+    private void Choisir(int id)
+    {
+        if (!choisis.Remove(id)) choisis.Add(id);
+    }
+
+    private void ChoisirListe(string code)
+    {
+        if (!listesChoisies.Remove(code)) listesChoisies.Add(code);
+    }
+
+    private Task AjouterIngredient() => Executer(async () =>
+    {
+        if (string.IsNullOrWhiteSpace(nouvel.Nom))
+        {
+            erreur = "Le nom de l'ingrédient est obligatoire.";
+            return;
+        }
+
+        var ajoute = await Recettes.AjouterIngredientAsync(recette!.Code, nouvel);
+        if (ajoute is not null) choisis.Add(ajoute.Id);   // un nouvel ingrédient est coché d'office
+        nouvel = new() { Rayon = nouvel.Rayon };          // on garde le rayon pour l'ingrédient suivant
+        await ChargerRecette();
+    });
+
+    private Task SupprimerIngredient(int id) => Executer(async () =>
+    {
+        await Recettes.SupprimerIngredientAsync(recette!.Code, id);
+        choisis.Remove(id);
+        await ChargerRecette();
+    });
+
+    // Pour chaque liste cochée : un seul appel qui ajoute tous les ingrédients cochés.
+    private Task AjouterAuxListes() => Executer(async () =>
+    {
+        resultats.Clear();
+        var articles = recette!.Ingredients
+            .Where(i => choisis.Contains(i.Id))
+            .Select(i => new Article { Nom = i.NomPourListe(), Rayon = i.Rayon })
+            .ToList();
+
+        foreach (var liste in listes!.Where(l => listesChoisies.Contains(l.Code)))
+        {
+            var r = await Listes.AjouterPlusieursAsync(liste.Code, articles);
+            resultats.Add(r is null
+                ? $"{liste.Nom} : liste introuvable."
+                : $"{liste.Nom} : {Pluriel(r.Ajoutes, "ingrédient")} ajouté{(r.Ajoutes > 1 ? "s" : "")}"
+                  + (r.DejaPresents > 0 ? $", {r.DejaPresents} déjà présent{(r.DejaPresents > 1 ? "s" : "")}." : "."));
+        }
+    });
+
+    private Task Enregistrer() => Executer(async () =>
+    {
+        await Recettes.ModifierAsync(recette!.Code, new ModificationRecette(nomEdite ?? "", instructionsEditees));
+        await ChargerRecette();
+        nomEdite = recette!.Nom;
+        enregistre = true;
+    });
+
+    private Task Partager() => Executer(async () =>
+    {
+        await Partage.PartagerAsync(recette!.Nom, Partage.Lien($"r/{recette.Code}"));
+    });
+
+    private async Task Executer(Func<Task> action)
+    {
+        try
+        {
+            erreur = null;
+            enregistre = false;
+            await action();
+        }
+        catch (Exception e)
+        {
+            erreur = $"Le serveur ne répond pas. Vérifiez votre connexion Internet, puis réessayez. ({e.GetType().Name})";
+        }
+    }
+}

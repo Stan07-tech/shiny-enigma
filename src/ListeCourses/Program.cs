@@ -11,7 +11,8 @@ var builder = WebApplication.CreateBuilder(args);
 // les fournit ensuite automatiquement à qui les demande (API ou composants).
 // Base de données : SQLite en local, SQL Server (Azure SQL) en production,
 // selon le réglage "BaseDeDonnees" (appsettings.json ou paramètres Azure).
-builder.Services.AddDbContextFactory<CoursesDbContext>(options =>
+// Les deux DbContext (listes et recettes) utilisent la même base.
+void ConfigurerBase(DbContextOptionsBuilder options)
 {
     var chaine = builder.Configuration.GetConnectionString("Courses");
     if (builder.Configuration["BaseDeDonnees"] == "SqlServer")
@@ -19,10 +20,14 @@ builder.Services.AddDbContextFactory<CoursesDbContext>(options =>
         options.UseSqlServer(chaine, sql => sql.EnableRetryOnFailure());
     else
         options.UseSqlite(chaine);
-});
+}
+builder.Services.AddDbContextFactory<CoursesDbContext>(ConfigurerBase);
+builder.Services.AddDbContextFactory<RecettesDbContext>(ConfigurerBase);
 builder.Services.AddSingleton<NotificateurListes>();
 builder.Services.AddSingleton<IListeService, ListeServiceEf>();
+builder.Services.AddSingleton<IRecetteService, RecetteServiceEf>();
 builder.Services.AddScoped<IListesConnues, ListesConnuesNavigateur>();
+builder.Services.AddScoped<IRecettesConnues, RecettesConnuesNavigateur>();
 builder.Services.AddScoped<IPartage, PartageNavigateur>();
 builder.Services.AddSignalR();
 
@@ -37,6 +42,10 @@ var app = builder.Build();
 using (var db = app.Services.GetRequiredService<IDbContextFactory<CoursesDbContext>>().CreateDbContext())
 {
     db.Database.EnsureCreated();
+}
+using (var db = app.Services.GetRequiredService<IDbContextFactory<RecettesDbContext>>().CreateDbContext())
+{
+    db.CreerTablesSiAbsentes();
 }
 
 // Chaque modification d'une liste est relayée aux applis mobiles qui la suivent.
@@ -83,12 +92,45 @@ articles.MapPatch("/{id:int}/basculer", async (string code, int id, IListeServic
 articles.MapDelete("/{id:int}", async (string code, int id, IListeService service) =>
     await service.SupprimerAsync(Normaliser(code), id) ? Results.NoContent() : Results.NotFound());
 
+articles.MapPost("/lot", async (string code, List<Article> lot, IListeService service) =>
+    await service.AjouterPlusieursAsync(Normaliser(code), lot) is { } resultat ? Results.Ok(resultat) : Results.NotFound());
+
 articles.MapDelete("/achetes", async (string code, IListeService service) =>
 {
     if (await service.ObtenirAsync(Normaliser(code)) is null) return Results.NotFound();
     await service.SupprimerAchetesAsync(Normaliser(code));
     return Results.NoContent();
 });
+
+// ----- API REST des recettes -----
+var recettes = app.MapGroup("/api/recettes");
+
+recettes.MapPost("/", async (NouvelleListe demande, IRecetteService service) =>
+{
+    var recette = await service.CreerAsync(demande.Nom);
+    return Results.Created($"/api/recettes/{recette.Code}", recette);
+});
+
+recettes.MapGet("/{code}", async (string code, IRecetteService service) =>
+    await service.ObtenirAsync(Normaliser(code)) is { } recette ? Results.Ok(recette) : Results.NotFound());
+
+recettes.MapPost("/resumes", (List<string> codes, IRecetteService service) => service.ResumesAsync(codes));
+
+recettes.MapPut("/{code}", async (string code, ModificationRecette modification, IRecetteService service) =>
+    await service.ModifierAsync(Normaliser(code), modification) ? Results.NoContent() : Results.NotFound());
+
+recettes.MapPost("/{code}/ingredients", async (string code, Ingredient ingredient, IRecetteService service) =>
+{
+    if (string.IsNullOrWhiteSpace(ingredient.Nom))
+        return Results.BadRequest("Le nom est obligatoire.");
+
+    return await service.AjouterIngredientAsync(Normaliser(code), ingredient) is { } nouvel
+        ? Results.Created($"/api/recettes/{Normaliser(code)}/ingredients/{nouvel.Id}", nouvel)
+        : Results.NotFound();
+});
+
+recettes.MapDelete("/{code}/ingredients/{id:int}", async (string code, int id, IRecetteService service) =>
+    await service.SupprimerIngredientAsync(Normaliser(code), id) ? Results.NoContent() : Results.NotFound());
 
 // ----- Interface Blazor -----
 app.MapRazorComponents<App>()
