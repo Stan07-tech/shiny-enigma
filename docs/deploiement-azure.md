@@ -152,28 +152,27 @@ Sans Git, téléchargez le ZIP de la branche sur GitHub (bouton **Code** puis
 **Download ZIP**), extrayez-le et placez-vous dans le dossier obtenu avec `cd`.
 La commande `ls` doit alors afficher `src`, `docs`, `tests` et `README.md`.
 
-Puis, depuis ce dossier :
+Puis, depuis ce dossier, lancez le script `publier.ps1`. Il publie le site, crée
+le ZIP et l'envoie à Azure :
 
 ```powershell
-Remove-Item publie, site.zip -Recurse -Force -ErrorAction SilentlyContinue
-dotnet publish src/ListeCourses -c Release -r linux-x64 --self-contained false -o publie
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-[IO.Compression.ZipFile]::CreateFromDirectory("$PWD\publie", "$PWD\site.zip")
-az webapp deploy --resource-group $rg --name $app --src-path site.zip --type zip
+powershell -ExecutionPolicy Bypass -File .\publier.ps1 -GroupeRessources $rg -Application $app
 ```
 
-- La première ligne supprime le résultat d'une publication précédente.
-- `-r linux-x64` ne garde que ce qui sert sur le serveur Linux d'Azure, ce qui réduit
-  le ZIP d'environ 43 Mo à 19 Mo.
-- Le ZIP est créé avec la classe .NET `ZipFile` plutôt qu'avec `Compress-Archive`.
-  Sous Windows PowerShell 5.1, `Compress-Archive` écrit des chemins avec `\`,
-  que le serveur Linux refuse (erreur `Kudu Status : 400`).
+`-ExecutionPolicy Bypass` autorise ce script pour cette exécution uniquement : par
+défaut, Windows bloque les fichiers `.ps1`.
 
-Si l'envoi échoue avec `ConnectionResetError` ou `Connection aborted`, la connexion
-a été coupée pendant l'envoi. Relancez simplement la dernière commande : le premier
-essai réveille souvent le service de déploiement, qui était en veille.
+Pourquoi un script plutôt que `Compress-Archive` ? Sous Windows PowerShell 5.1,
+`Compress-Archive` et `ZipFile.CreateFromDirectory` écrivent les chemins du ZIP avec
+des `\` (`wwwroot\app.css`). Le serveur Linux d'Azure les refuse (`Kudu Status : 400`,
+et `failed to stat ... Invalid argument` dans le journal). Le script ajoute les
+fichiers un par un avec des `/`.
 
-Recommencez ces trois commandes à chaque nouvelle version du site.
+Si l'envoi échoue avec `ConnectionResetError` ou `Connection aborted`, la connexion a
+été coupée : relancez simplement le script. Le premier essai réveille souvent le
+service de déploiement, qui était en veille.
+
+Pour une nouvelle version du site, récupérez le code (`git pull`) puis relancez le script.
 
 ## 6. Vérifier
 
