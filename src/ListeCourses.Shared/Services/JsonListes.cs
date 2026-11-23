@@ -14,6 +14,7 @@ namespace ListeCourses.Services;
 [JsonSerializable(typeof(List<ListeResume>))]
 [JsonSerializable(typeof(NouvelleListe))]
 [JsonSerializable(typeof(ResultatAjout))]
+[JsonSerializable(typeof(List<Unite>))]
 [JsonSerializable(typeof(RecetteResume))]
 [JsonSerializable(typeof(List<RecetteResume>))]
 [JsonSerializable(typeof(RecetteDetail))]

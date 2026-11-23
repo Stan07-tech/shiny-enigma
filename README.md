@@ -9,6 +9,11 @@ mises à jour **en temps réel** entre plusieurs personnes, consultables rayon p
 - Quand quelqu'un ajoute ou coche un article, les écrans des autres se mettent à jour seuls.
 - Onglet **Recettes** : des recettes partageables de la même façon (`/r/CODE`), dont on
   ajoute tout ou partie des ingrédients à une ou plusieurs listes, en un clic.
+- **Unités de mesure** (table `Unites` : Pce, g, Kg, L, cL, CaS, CaC, pn) dans un menu
+  déroulant, pour les articles comme pour les ingrédients ; quantités décimales (1,5 Kg).
+- **Saisie automatique** des noms et des rayons (catalogue de produits courants + noms
+  déjà utilisés) ; choisir un produit connu remplit son rayon.
+- **Actualisation** toutes les 10 secondes d'une liste affichée, en plus du temps réel.
 
 Trois interfaces partagent le même code :
 - **Site web Blazor** : l'interface est écrite en C# ;
@@ -47,8 +52,11 @@ Les pages ne connaissent que l'interface `IListeService`, réalisée deux fois :
 | `Shared/Pages/MesRecettes.razor`, `PageRecette.razor` | Recettes : ingrédients, préparation, ajout aux listes | Fenêtres |
 | `Shared/Composants/Onglets.razor` | Menu « Listes / Recettes » | Menu / onglets |
 | `Shared/Composants/LimiteErreur.razor` | Filet de sécurité en cas d'erreur | `QUAND EXCEPTION` |
-| `ListeCourses/Data/CoursesDbContext.cs` | Accès à la base : listes (EF Core) | `HOuvreConnexion` + analyse |
-| `ListeCourses/Data/RecettesDbContext.cs` | Accès à la base : recettes | Seconde analyse, même base |
+| `ListeCourses/Data/CoursesDbContext.cs` | Accès à la base (EF Core) : toutes les tables | `HOuvreConnexion` + analyse |
+| `ListeCourses/Data/Migrations/` | Évolutions de la structure de la base | Scripts de modification de l'analyse |
+| `ListeCourses/Data/MiseANiveauBase.cs` | Applique les migrations au démarrage | Modification automatique des fichiers |
+| `Shared/Models/Unite.cs` | Unités de mesure et mise en forme des quantités | Fichier de paramètres |
+| `Shared/Models/Catalogue.cs` | Produits courants et leur rayon (saisie automatique) | — |
 | `ListeCourses/Services/ListeServiceEf.cs` | Logique métier côté serveur | Collection de procédures globales |
 | `ListeCourses/Services/HubListes.cs` | Hub SignalR (temps réel) | — |
 | `ListeCourses/Program.cs` | Configuration du site + API REST | Code du projet / webservice |
@@ -65,8 +73,29 @@ dotnet run --project src/ListeCourses
 Puis ouvrir l'URL affichée dans la console (ex. : http://localhost:5xxx).
 La base SQLite `courses.db` est créée automatiquement au premier lancement.
 
-> Si vous aviez un `courses.db` d'une version précédente (sans les listes),
-> supprimez-le : la structure des tables a changé.
+> En local, la base SQLite est créée directement à partir du modèle. Après un
+> changement de structure, supprimez `courses.db` pour la recréer.
+
+## Base de données et migrations
+
+En production (Azure SQL), la structure de la base évolue par **migrations EF Core**
+(`src/ListeCourses/Data/Migrations`) : chacune décrit un changement (création de table,
+ajout de colonne, conversion de données en T-SQL). Au démarrage, le site applique celles
+qui manquent et les note dans la table `__EFMigrationsHistory`.
+
+Pour modifier la structure (ajouter une propriété à une entité, par exemple) :
+
+```bash
+dotnet tool restore
+dotnet ef migrations add NomDuChangement --project src/ListeCourses -o Data/Migrations
+dotnet ef migrations script --project src/ListeCourses   # voir le SQL généré
+```
+
+Pour ajouter une unité, une simple requête suffit (dans SSMS), puis redémarrer le site :
+
+```sql
+INSERT INTO Unites (Symbole, Libelle, Ordre) VALUES (N'sachet', N'Sachet(s)', 9);
+```
 
 ## Déployer sur Azure
 
@@ -85,6 +114,10 @@ dotnet test tests/ListeCourses.Tests
   site en mémoire et l'appelle en HTTP (codes 201, 400, 404, pages).
 - `ListeServiceApiTests.cs` : le client de l'appli mobile contre le vrai serveur,
   y compris la notification en temps réel par SignalR entre deux « téléphones ».
+- `MigrationsSqlServerTests.cs` : les migrations sur un vrai SQL Server (base neuve,
+  base existante, conversion des quantités). Ils sont ignorés sauf si la variable
+  `LISTECOURSES_SQLSERVER` contient une chaîne de connexion, par exemple
+  `Server=localhost;User ID=sa;Password=...;TrustServerCertificate=True`.
 
 Vocabulaire : `[Fact]` = un test ; `[Theory]` + `[InlineData]` = le même test
 avec plusieurs jeux de valeurs ; `Assert.Equal(attendu, obtenu)` = la vérification.
@@ -133,6 +166,7 @@ d'un article ne suffit pas pour le modifier.
 | PUT | `/api/recettes/{code}` | Modifier le nom et la préparation |
 | POST | `/api/recettes/{code}/ingredients` | Ajouter un ingrédient |
 | DELETE | `/api/recettes/{code}/ingredients/{id}` | Supprimer un ingrédient |
+| GET | `/api/unites` | Unités de mesure |
 
 Temps réel : hub SignalR `/hub/listes`, méthodes `Suivre(code)` / `NePlusSuivre(code)`,
 message reçu `ListeModifiee(code)`.
@@ -141,7 +175,5 @@ message reçu `ListeModifiee(code)`.
 
 - Qui possède le lien d'une liste peut la modifier : ne le partagez qu'avec les bonnes personnes.
 - Pas de suppression définitive d'une liste (« ✕ » la retire seulement de « Mes listes »).
-- Les tables sont créées par `EnsureCreated()` (listes) et `CreerTablesSiAbsentes()`
-  (recettes, ajoutées dans une base existante) : pour faire évoluer la structure d'une
-  table existante sans perdre les données, il faudra passer aux **migrations** EF Core.
-- Ajout d'ingrédients : « Lait » et « Lait (50 cl) » sont considérés comme deux articles différents.
+- Ajout d'ingrédients : un article déjà présent (même nom, non acheté) n'est pas ajouté,
+  et les quantités ne sont pas additionnées.

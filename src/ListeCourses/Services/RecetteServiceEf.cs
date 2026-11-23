@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace ListeCourses.Services;
 
 // Implémentation "serveur" des recettes : accès direct à la base avec EF Core.
-public class RecetteServiceEf(IDbContextFactory<RecettesDbContext> dbFactory) : IRecetteService
+public class RecetteServiceEf(IDbContextFactory<CoursesDbContext> dbFactory) : IRecetteService
 {
     private const int MaxResumes = 100;
 
@@ -78,7 +78,8 @@ public class RecetteServiceEf(IDbContextFactory<RecettesDbContext> dbFactory) : 
         {
             RecetteId = recetteId.Value,
             Nom = nom,
-            Quantite = Nettoyer(ingredient.Quantite, 30),
+            Quantite = ingredient.Quantite is > 0 ? ingredient.Quantite : null,
+            UniteId = ingredient.UniteId,
             Rayon = Nettoyer(ingredient.Rayon, 50),
         };
         db.Ingredients.Add(nouvel);

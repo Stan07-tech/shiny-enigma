@@ -4,6 +4,8 @@
 @inject IListeService Service
 @inject IListesConnues ListesConnues
 @inject IPartage Partage
+@inject IUniteService ServiceUnites
+@inject IJSRuntime JS
 
 @* Un composant Razor = du HTML + du C#. C'est l'équivalent d'une fenêtre
    WinDev : les champs (HTML) et le code des événements (@code plus bas).
@@ -42,12 +44,17 @@ else
     </div>
 
     <form class="ajout" @onsubmit="Ajouter">
+        @* list="..." : saisie automatique ; @bind:after : remplit le rayon d'un produit connu. *@
         <input class="nom-saisie" placeholder="Article (ex. : pain)" maxlength="100" autocomplete="off"
-               @bind="nouvel.Nom" />
-        <input class="quantite" type="number" min="1" aria-label="Quantité" @bind="nouvel.Quantite" />
-        <input class="rayon-saisie" placeholder="Rayon" maxlength="50" @bind="nouvel.Rayon" />
+               list="suggestions-articles" @bind="nouvel.Nom" @bind:after="CompleterApresNom" />
+        <input class="quantite" type="number" min="0" step="any" aria-label="Quantité" @bind="nouvel.Quantite" />
+        <SelectUnite @bind-Valeur="nouvel.UniteId" Unites="unites" />
+        <input class="rayon-saisie" placeholder="Rayon" maxlength="50" autocomplete="off"
+               list="suggestions-rayons" @bind="nouvel.Rayon" />
         <button class="principal" type="submit">Ajouter</button>
     </form>
+    <Suggestions Id="suggestions-articles" Valeurs="SuggestionsNoms" />
+    <Suggestions Id="suggestions-rayons" Valeurs="SuggestionsRayons" />
 
     @if (erreur is not null)
     {
@@ -83,7 +90,7 @@ else
             {
                 <li @key="a.Id" class="@(a.Achete ? "achete" : null)">
                     <input type="checkbox" checked="@a.Achete" @onchange="() => Basculer(a.Id)" />
-                    <span class="nom">@a.Nom@(a.Quantite > 1 ? $" × {a.Quantite}" : "")</span>
+                    <span class="nom">@a.Nom<span class="quantite-article">@TexteQuantite(a)</span></span>
                     @if (EstVueTous)
                     {
                         <span class="rayon">@a.Rayon</span>
@@ -112,6 +119,8 @@ else
 
     private ListeResume? liste;
     private List<Article>? articles;
+    private List<Unite> unites = [];
+    private CancellationTokenSource? arretActualisation;
     private Article nouvel = new();
     private string? erreur;
     private bool erreurConnexion;
@@ -143,6 +152,33 @@ else
 
     private int Restants => articles is null ? 0 : Visibles.Count(a => !a.Achete);
 
+    // "Lait × 2", "Farine · 500 g", "Pain" (1 sans unité)
+    private string TexteQuantite(Article a)
+    {
+        var unite = unites.FirstOrDefault(u => u.Id == a.UniteId);
+        if (unite is null) return a.Quantite == 1 ? "" : $" × {Quantites.Nombre(a.Quantite)}";
+        return $" · {Quantites.Texte(a.Quantite, unite)}";
+    }
+
+    // Saisie automatique : produits du catalogue + noms et rayons déjà présents dans la liste.
+    private IEnumerable<string> SuggestionsNoms =>
+        Catalogue.Produits.Keys.Concat(articles?.Select(a => a.Nom) ?? [])
+            .Distinct(StringComparer.CurrentCultureIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase);
+
+    private IEnumerable<string> SuggestionsRayons =>
+        Catalogue.Rayons.Concat(articles?.Where(a => a.Rayon is not null).Select(a => a.Rayon!) ?? [])
+            .Distinct(StringComparer.CurrentCultureIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase);
+
+    // Après la saisie du nom : si le produit est connu (déjà dans la liste, ou dans
+    // le catalogue), on remplit son rayon et son unité s'ils sont encore vides.
+    private void CompleterApresNom()
+    {
+        var connu = articles?.FirstOrDefault(a => string.Equals(a.Nom, nouvel.Nom?.Trim(), StringComparison.CurrentCultureIgnoreCase));
+        if (string.IsNullOrWhiteSpace(nouvel.Rayon))
+            nouvel.Rayon = connu?.Rayon ?? Catalogue.RayonDe(nouvel.Nom);
+        nouvel.UniteId ??= connu?.UniteId;
+    }
+
     // Appelé à chaque changement d'adresse : changement de rayon, ou d'une liste à l'autre.
     protected override async Task OnParametersSetAsync()
     {
@@ -170,6 +206,7 @@ else
             }
 
             await ListesConnues.AjouterAsync(liste.Code);
+            unites = await ServiceUnites.ListerAsync();
             await Charger();
 
             // Temps réel : quand quelqu'un d'autre modifie la liste, on recharge.
@@ -179,7 +216,75 @@ else
                 await Executer(Charger);
                 StateHasChanged();
             }));
+
+            DemarrerActualisation();
         });
+    }
+
+    // ----- Rechargement automatique -----
+    // En plus du temps réel (SignalR), la liste est relue toutes les 10 secondes,
+    // mais seulement si elle est affichée à l'écran : ni onglet caché, ni appli en
+    // arrière-plan (inutile de réveiller le serveur et la base pour rien).
+
+    protected override void OnInitialized() => Actualisation.Reprise += SurReprise;
+
+    private void DemarrerActualisation()
+    {
+        arretActualisation?.Cancel();
+        arretActualisation = new CancellationTokenSource();
+        var jeton = arretActualisation.Token;
+
+        _ = InvokeAsync(async () =>
+        {
+            using var minuterie = new PeriodicTimer(Actualisation.Intervalle);
+            try
+            {
+                while (await minuterie.WaitForNextTickAsync(jeton))
+                {
+                    if (!Actualisation.EnArrierePlan && await PageVisible())
+                        await ActualiserEnSilence();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Page fermée ou autre liste ouverte : on arrête.
+            }
+        });
+    }
+
+    // Retour dans l'appli (téléphone) : on recharge tout de suite.
+    private void SurReprise() => _ = InvokeAsync(ActualiserEnSilence);
+
+    private async Task ActualiserEnSilence()
+    {
+        if (liste is null) return;
+        try
+        {
+            articles = await Service.ArticlesAsync(liste.Code) ?? articles;
+            if (erreurConnexion)
+            {
+                // Le serveur répond de nouveau : on efface le message d'erreur.
+                erreur = null;
+                erreurConnexion = false;
+            }
+            StateHasChanged();
+        }
+        catch (Exception)
+        {
+            // Réseau momentanément indisponible : nouvel essai dans 10 secondes.
+        }
+    }
+
+    private async Task<bool> PageVisible()
+    {
+        try
+        {
+            return await JS.InvokeAsync<string>("eval", "document.visibilityState") == "visible";
+        }
+        catch (Exception)
+        {
+            return true;
+        }
     }
 
     private async Task Charger() => articles = await Service.ArticlesAsync(liste!.Code) ?? [];
@@ -262,9 +367,14 @@ else
 
     private async Task ArreterSuivi()
     {
+        arretActualisation?.Cancel();
         if (suivi is not null) await suivi.DisposeAsync();
         suivi = null;
     }
 
-    public async ValueTask DisposeAsync() => await ArreterSuivi();
+    public async ValueTask DisposeAsync()
+    {
+        Actualisation.Reprise -= SurReprise;
+        await ArreterSuivi();
+    }
 }

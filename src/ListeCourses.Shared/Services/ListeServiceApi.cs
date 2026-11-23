@@ -15,15 +15,26 @@ public sealed class ListeServiceApi(HttpClient http, HubConnection hub) : IListe
     private readonly SemaphoreSlim verrouConnexion = new(1, 1);
     private readonly List<(string Code, Func<Task> Rappel)> abonnements = [];
     private bool gestionnairesInstalles;
+    private int relanceEnCours;
 
     // Prépare la connexion SignalR vers le hub du serveur.
     // "configurer" permet aux tests de remplacer le transport réseau.
     public static HubConnection CreerConnexionHub(Uri adresseServeur, Action<HttpConnectionOptions>? configurer = null) =>
         new HubConnectionBuilder()
             .WithUrl(new Uri(adresseServeur, "hub/listes"), options => configurer?.Invoke(options))
-            .WithAutomaticReconnect()
+            .WithAutomaticReconnect(new ReconnexionSansFin())
             .AddJsonProtocol(o => o.PayloadSerializerOptions.TypeInfoResolverChain.Insert(0, JsonListes.Default))
             .Build();
+
+    // Par défaut, SignalR abandonne après 4 essais (environ 40 s de coupure) et la
+    // liste ne se met plus à jour. Ici : on réessaie indéfiniment, toutes les 10 s.
+    private sealed class ReconnexionSansFin : IRetryPolicy
+    {
+        private static readonly TimeSpan[] Delais = [TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5)];
+
+        public TimeSpan? NextRetryDelay(RetryContext contexte) =>
+            contexte.PreviousRetryCount < Delais.Length ? Delais[contexte.PreviousRetryCount] : TimeSpan.FromSeconds(10);
+    }
 
     public async Task<ListeResume> CreerAsync(string nom)
     {
@@ -88,7 +99,9 @@ public sealed class ListeServiceApi(HttpClient http, HubConnection hub) : IListe
         }
         catch (Exception)
         {
-            // Pas de réseau : la liste reste utilisable, seulement sans mise à jour automatique.
+            // Pas de réseau (ou serveur en veille) : la liste reste utilisable, et on
+            // retentera la connexion en arrière-plan.
+            RelancerEnArrierePlan();
         }
         finally
         {
@@ -106,6 +119,43 @@ public sealed class ListeServiceApi(HttpClient http, HubConnection hub) : IListe
             if (dernier && hub.State == HubConnectionState.Connected)
             {
                 try { await hub.InvokeAsync("NePlusSuivre", code); } catch (Exception) { }
+            }
+        });
+    }
+
+    // Retente la connexion toutes les 15 s tant que des listes sont suivies.
+    // (Une fois connecté, c'est ReconnexionSansFin qui prend le relais.)
+    private void RelancerEnArrierePlan()
+    {
+        if (Interlocked.Exchange(ref relanceEnCours, 1) == 1) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (hub.State == HubConnectionState.Disconnected && Codes().Length > 0)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(15));
+                    await verrouConnexion.WaitAsync();
+                    try
+                    {
+                        if (hub.State != HubConnectionState.Disconnected) break;
+                        await hub.StartAsync();
+                        foreach (var code in Codes()) await hub.InvokeAsync("Suivre", code);
+                    }
+                    catch (Exception)
+                    {
+                        // Toujours pas de réseau : on réessaiera.
+                    }
+                    finally
+                    {
+                        verrouConnexion.Release();
+                    }
+                }
+                if (hub.State == HubConnectionState.Connected) await PrevenirAsync(_ => true);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref relanceEnCours, 0);
             }
         });
     }

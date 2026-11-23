@@ -82,8 +82,8 @@ public sealed class ListeServiceApiTests(SiteDeTest site) : IClassFixture<SiteDe
         var telephone = NouveauTelephone();
 
         var crepes = await recettes.CreerAsync("Crêpes");
-        await recettes.AjouterIngredientAsync(crepes.Code, new Ingredient { Nom = "Farine", Quantite = "250 g", Rayon = "Épicerie" });
-        await recettes.AjouterIngredientAsync(crepes.Code, new Ingredient { Nom = "Œufs", Quantite = "4", Rayon = "Frais" });
+        await recettes.AjouterIngredientAsync(crepes.Code, new Ingredient { Nom = "Farine", Quantite = 250, UniteId = 2, Rayon = "Épicerie" });
+        await recettes.AjouterIngredientAsync(crepes.Code, new Ingredient { Nom = "Œufs", Quantite = 4, Rayon = "Frais" });
         Assert.True(await recettes.ModifierAsync(crepes.Code, new ModificationRecette("Crêpes", "Mélanger.")));
         var detail = (await recettes.ObtenirAsync(crepes.Code))!;
         Assert.Equal([crepes with { NbIngredients = 2 }], await recettes.ResumesAsync([crepes.Code]));
@@ -92,12 +92,12 @@ public sealed class ListeServiceApiTests(SiteDeTest site) : IClassFixture<SiteDe
 
         var liste = await telephone.CreerAsync("Maison");
         var articles = (await recettes.ObtenirAsync(crepes.Code))!.Ingredients
-            .Select(i => new Article { Nom = i.NomPourListe(), Rayon = i.Rayon });
+            .Select(i => i.VersArticle());
         Assert.Equal(new ResultatAjout(1, 0), await telephone.AjouterPlusieursAsync(liste.Code, articles));
         Assert.Equal(new ResultatAjout(0, 1), await telephone.AjouterPlusieursAsync(liste.Code, articles));
 
         var article = Assert.Single((await telephone.ArticlesAsync(liste.Code))!);
-        Assert.Equal(("Farine (250 g)", "Épicerie"), (article.Nom, article.Rayon));
+        Assert.Equal(("Farine", 250m, 2, "Épicerie"), (article.Nom, article.Quantite, article.UniteId, article.Rayon));
     }
 
     [Fact]

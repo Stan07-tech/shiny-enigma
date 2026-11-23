@@ -1,4 +1,6 @@
-﻿namespace ListeCourses.Mobile;
+﻿using ListeCourses.Services;
+
+namespace ListeCourses.Mobile;
 
 public partial class App : Application
 {
@@ -12,6 +14,13 @@ public partial class App : Application
 
 	protected override Window CreateWindow(IActivationState? activationState)
 	{
-		return new Window(new MainPage()) { Title = "Liste de courses" };
+		var fenetre = new Window(new MainPage()) { Title = "Liste de courses" };
+
+		// Appli en arrière-plan : les listes ouvertes cessent d'interroger le serveur.
+		// Retour au premier plan : elles se rechargent aussitôt.
+		fenetre.Stopped += (_, _) => Actualisation.PasserEnArrierePlan();
+		fenetre.Resumed += (_, _) => Actualisation.RevenirAuPremierPlan();
+
+		return fenetre;
 	}
 }

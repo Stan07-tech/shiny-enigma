@@ -80,7 +80,8 @@ public class ListeServiceEf(IDbContextFactory<CoursesDbContext> dbFactory, Notif
         {
             ListeId = listeId.Value,
             Nom = Tronquer(article.Nom.Trim(), 100),
-            Quantite = Math.Max(1, article.Quantite),
+            Quantite = article.Quantite > 0 ? article.Quantite : 1,
+            UniteId = article.UniteId,
             Rayon = string.IsNullOrWhiteSpace(article.Rayon) ? null : Tronquer(article.Rayon.Trim(), 50),
         };
         db.Articles.Add(nouvel);
@@ -115,7 +116,8 @@ public class ListeServiceEf(IDbContextFactory<CoursesDbContext> dbFactory, Notif
             {
                 ListeId = listeId.Value,
                 Nom = nom,
-                Quantite = Math.Max(1, article.Quantite),
+                Quantite = article.Quantite > 0 ? article.Quantite : 1,
+                UniteId = article.UniteId,
                 Rayon = string.IsNullOrWhiteSpace(article.Rayon) ? null : Tronquer(article.Rayon.Trim(), 50),
             });
             ajoutes++;

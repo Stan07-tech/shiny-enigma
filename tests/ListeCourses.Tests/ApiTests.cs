@@ -124,13 +124,14 @@ public sealed class ApiTests(SiteDeTest site) : IClassFixture<SiteDeTest>
         Assert.Equal(HttpStatusCode.BadRequest,
             (await client.PostAsJsonAsync($"/api/recettes/{code}/ingredients", new { nom = " " })).StatusCode);
         var farine = await (await client.PostAsJsonAsync($"/api/recettes/{code}/ingredients",
-            new { nom = "Farine", quantite = "250 g", rayon = "Épicerie" })).Content.ReadFromJsonAsync<Ingredient>();
+            new { nom = "Farine", quantite = 250, uniteId = 2, rayon = "Épicerie" })).Content.ReadFromJsonAsync<Ingredient>();
         Assert.Equal(HttpStatusCode.NoContent,
             (await client.PutAsJsonAsync($"/api/recettes/{code.ToLowerInvariant()}", new { nom = "Crêpes", instructions = "Mélanger." })).StatusCode);
 
         var recette = await client.GetFromJsonAsync<RecetteDetail>($"/api/recettes/{code}");
         Assert.Equal("Mélanger.", recette!.Instructions);
-        Assert.Equal("250 g", Assert.Single(recette.Ingredients).Quantite);
+        var ingredient = Assert.Single(recette.Ingredients);
+        Assert.Equal((250m, 2), (ingredient.Quantite, ingredient.UniteId));
 
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/recettes/{code}/ingredients/{farine!.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"/api/recettes/{code}/ingredients/{farine.Id}")).StatusCode);
@@ -150,53 +151,26 @@ public sealed class ApiTests(SiteDeTest site) : IClassFixture<SiteDeTest>
             (await client.PostAsJsonAsync("/api/listes/AAAAAAAAAA/articles/lot", new[] { new { nom = "Pain" } })).StatusCode);
     }
 
+    [Fact]
+    public async Task Unites_SontListeesDansLOrdre()
+    {
+        var unites = await client.GetFromJsonAsync<List<Unite>>("/api/unites");
+
+        Assert.Equal(["Pce", "g", "Kg", "L", "cL", "CaS", "CaC", "pn"], unites!.Select(u => u.Symbole));
+    }
+
+    [Fact]
+    public async Task Article_QuantiteDecimaleEtUniteConservees()
+    {
+        var code = await CreerListe();
+
+        await client.PostAsJsonAsync($"/api/listes/{code}/articles", new { nom = "Pommes de terre", quantite = 1.5, uniteId = 3 });
+
+        var article = Assert.Single((await client.GetFromJsonAsync<List<Article>>($"/api/listes/{code}/articles"))!);
+        Assert.Equal((1.5m, 3), (article.Quantite, article.UniteId));
+    }
+
     private async Task<string> CreerListe() =>
         (await (await client.PostAsJsonAsync("/api/listes", new { nom = "Test" }))
             .Content.ReadFromJsonAsync<ListeResume>())!.Code;
-}
-
-// Reproduit la base Azure actuelle : créée AVANT les recettes, elle ne contient
-// que les tables Listes et Articles (avec des données). Au démarrage, le site
-// doit y ajouter les tables des recettes sans toucher au reste.
-public sealed class SiteSurAncienneBase : WebApplicationFactory<Program>
-{
-    public readonly string CheminBase = Path.Combine(Path.GetTempPath(), $"courses-ancienne-{Guid.NewGuid()}.db");
-    public string CodeListeExistante = "";
-
-    public SiteSurAncienneBase()
-    {
-        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<ListeCourses.Data.CoursesDbContext>()
-            .UseSqlite($"Data Source={CheminBase}").Options;
-        using var db = new ListeCourses.Data.CoursesDbContext(options);
-        db.Database.EnsureCreated();
-        var liste = new Liste { Code = "ANCIENNE22", Nom = "Ancienne", Articles = [new Article { Nom = "Pain" }] };
-        db.Listes.Add(liste);
-        db.SaveChanges();
-        CodeListeExistante = liste.Code;
-    }
-
-    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
-        builder.UseSetting("ConnectionStrings:Courses", $"Data Source={CheminBase}");
-
-    protected override void Dispose(bool disposing)
-    {
-        base.Dispose(disposing);
-        SqliteConnection.ClearAllPools();
-        File.Delete(CheminBase);
-    }
-}
-
-public sealed class MiseANiveauTests(SiteSurAncienneBase site) : IClassFixture<SiteSurAncienneBase>
-{
-    [Fact]
-    public async Task AncienneBase_RecoitLesTablesDesRecettes_SansPerdreLesListes()
-    {
-        var client = site.CreateClient();
-
-        var creation = await client.PostAsJsonAsync("/api/recettes", new { nom = "Crêpes" });
-        Assert.Equal(HttpStatusCode.Created, creation.StatusCode);
-
-        var articles = await client.GetFromJsonAsync<List<Article>>($"/api/listes/{site.CodeListeExistante}/articles");
-        Assert.Equal("Pain", Assert.Single(articles!).Nom);
-    }
 }

@@ -8,7 +8,8 @@ public class Article
 {
     public int Id { get; set; }                      // Clé primaire (IDENTITY)
     public string Nom { get; set; } = "";            // NVARCHAR NOT NULL
-    public int Quantite { get; set; } = 1;
+    public decimal Quantite { get; set; } = 1;          // DECIMAL(9,2) : 0,5 Kg, 1,5 L
+    public int? UniteId { get; set; }                   // FOREIGN KEY vers Unites (NULL = sans unité)
     public string? Rayon { get; set; }               // Le "?" = colonne NULLable
     public bool Achete { get; set; }                 // BIT
     public DateTime DateAjout { get; set; } = DateTime.UtcNow;

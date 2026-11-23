@@ -4,6 +4,7 @@
 @inject IRecettesConnues RecettesConnues
 @inject IListesConnues ListesConnues
 @inject IPartage Partage
+@inject IUniteService ServiceUnites
 
 @* Une recette : ses ingrédients, sa préparation, et l'ajout des ingrédients
    choisis à une ou plusieurs listes de courses. *@
@@ -44,12 +45,16 @@ else
     <h2>Ingrédients</h2>
     <form class="ajout" @onsubmit="AjouterIngredient">
         <input class="nom-saisie" placeholder="Ingrédient (ex. : farine)" maxlength="100" autocomplete="off"
-               @bind="nouvel.Nom" />
-        <input class="quantite-texte" placeholder="Quantité" maxlength="30" aria-label="Quantité (ex. : 200 g)"
+               list="suggestions-ingredients" @bind="nouvel.Nom" @bind:after="CompleterApresNom" />
+        <input class="quantite" type="number" min="0" step="any" placeholder="Qté" aria-label="Quantité"
                @bind="nouvel.Quantite" />
-        <input class="rayon-saisie" placeholder="Rayon" maxlength="50" @bind="nouvel.Rayon" />
+        <SelectUnite @bind-Valeur="nouvel.UniteId" Unites="unites" />
+        <input class="rayon-saisie" placeholder="Rayon" maxlength="50" autocomplete="off"
+               list="suggestions-rayons" @bind="nouvel.Rayon" />
         <button class="principal" type="submit">Ajouter</button>
     </form>
+    <Suggestions Id="suggestions-ingredients" Valeurs="SuggestionsNoms" />
+    <Suggestions Id="suggestions-rayons" Valeurs="SuggestionsRayons" />
 
     <ul>
         @if (recette.Ingredients.Count == 0)
@@ -61,7 +66,7 @@ else
             <li @key="i.Id">
                 <input type="checkbox" checked="@choisis.Contains(i.Id)" @onchange="() => Choisir(i.Id)"
                        aria-label="Ajouter @i.Nom aux listes" />
-                <span class="nom">@i.Nom<span class="quantite-ingredient">@(i.Quantite is null ? "" : $" · {i.Quantite}")</span></span>
+                <span class="nom">@i.Nom<span class="quantite-ingredient">@TexteQuantite(i)</span></span>
                 <span class="rayon">@i.Rayon</span>
                 <button class="suppr" title="Supprimer l'ingrédient" @onclick="() => SupprimerIngredient(i.Id)">✕</button>
             </li>
@@ -124,6 +129,7 @@ else
     [Parameter] public string Code { get; set; } = "";
 
     private RecetteDetail? recette;
+    private List<Unite> unites = [];
     private List<ListeResume>? listes;
     private Ingredient nouvel = new();
     private readonly HashSet<int> choisis = [];              // ingrédients cochés
@@ -160,6 +166,7 @@ else
             await RecettesConnues.AjouterAsync(recette.Code);
             nomEdite = recette.Nom;
             instructionsEditees = recette.Instructions;
+            unites = await ServiceUnites.ListerAsync();
             ToutCocher();
 
             // Les listes de cet appareil, pour choisir où ajouter les ingrédients.
@@ -174,6 +181,29 @@ else
     {
         codeCharge = null;
         await OnParametersSetAsync();
+    }
+
+    // "Farine · 250 g", "Œufs · 4", "Sel"
+    private string TexteQuantite(Ingredient i)
+    {
+        var texte = Quantites.Texte(i.Quantite, unites.FirstOrDefault(u => u.Id == i.UniteId));
+        return texte == "" ? "" : $" · {texte}";
+    }
+
+    // Saisie automatique : produits du catalogue + ingrédients de la recette.
+    private IEnumerable<string> SuggestionsNoms =>
+        Catalogue.Produits.Keys.Concat(recette?.Ingredients.Select(i => i.Nom) ?? [])
+            .Distinct(StringComparer.CurrentCultureIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase);
+
+    private IEnumerable<string> SuggestionsRayons =>
+        Catalogue.Rayons.Concat(recette?.Ingredients.Where(i => i.Rayon is not null).Select(i => i.Rayon!) ?? [])
+            .Distinct(StringComparer.CurrentCultureIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase);
+
+    // Produit connu du catalogue : on remplit son rayon.
+    private void CompleterApresNom()
+    {
+        var rayon = Catalogue.RayonDe(nouvel.Nom);
+        if (rayon is not null) nouvel.Rayon = rayon;
     }
 
     private async Task ChargerRecette() => recette = await Recettes.ObtenirAsync(recette!.Code) ?? recette;
@@ -221,7 +251,7 @@ else
         resultats.Clear();
         var articles = recette!.Ingredients
             .Where(i => choisis.Contains(i.Id))
-            .Select(i => new Article { Nom = i.NomPourListe(), Rayon = i.Rayon })
+            .Select(i => i.VersArticle())
             .ToList();
 
         foreach (var liste in listes!.Where(l => listesChoisies.Contains(l.Code)))

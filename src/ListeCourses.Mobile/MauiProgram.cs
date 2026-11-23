@@ -26,6 +26,8 @@ public static class MauiProgram
 			ListeServiceApi.CreerConnexionHub(Configuration.AdresseServeur)));
 		builder.Services.AddSingleton<IRecetteService>(_ => new RecetteServiceApi(
 			new HttpClient { BaseAddress = Configuration.AdresseServeur, Timeout = TimeSpan.FromSeconds(30) }));
+		builder.Services.AddSingleton<IUniteService>(_ => new UniteServiceApi(
+			new HttpClient { BaseAddress = Configuration.AdresseServeur, Timeout = TimeSpan.FromSeconds(30) }));
 		builder.Services.AddScoped<IListesConnues, ListesConnuesNavigateur>();
 		builder.Services.AddScoped<IRecettesConnues, RecettesConnuesNavigateur>();
 		builder.Services.AddSingleton<IPartage, PartageMobile>();

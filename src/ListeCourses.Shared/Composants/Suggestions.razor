@@ -1,0 +1,14 @@
+@* Saisie automatique : une <datalist> HTML. Un champ <input list="Id"> propose
+   ces valeurs pendant la frappe (le navigateur filtre tout seul). *@
+
+<datalist id="@Id">
+    @foreach (var valeur in Valeurs)
+    {
+        <option value="@valeur"></option>
+    }
+</datalist>
+
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter] public IEnumerable<string> Valeurs { get; set; } = [];
+}

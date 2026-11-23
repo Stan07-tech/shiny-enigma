@@ -5,22 +5,12 @@ namespace ListeCourses.Tests;
 
 public sealed class RecetteServiceEfTests : IDisposable
 {
-    private readonly BaseRecettesEnMemoire baseDeTest = new();
+    private readonly BaseEnMemoire baseDeTest = new();
     private readonly RecetteServiceEf service;
 
     public RecetteServiceEfTests() => service = new RecetteServiceEf(baseDeTest);
 
     public void Dispose() => baseDeTest.Dispose();
-
-    [Fact]
-    public void CreerTablesSiAbsentes_PeutEtreAppeleePlusieursFois()
-    {
-        using var db = baseDeTest.CreateDbContext();
-
-        db.CreerTablesSiAbsentes();   // déjà créées par le constructeur : ne doit rien faire
-
-        Assert.Empty(db.Recettes);
-    }
 
     [Theory]
     [InlineData("  Crêpes  ", "Crêpes")]
@@ -47,13 +37,13 @@ public sealed class RecetteServiceEfTests : IDisposable
         Assert.Null(await service.AjouterIngredientAsync(code, new Ingredient { Nom = "  " }));
         Assert.Null(await service.AjouterIngredientAsync("AAAAAAAAAA", new Ingredient { Nom = "Farine" }));
 
-        var farine = (await service.AjouterIngredientAsync(code, new Ingredient { Nom = " Farine ", Quantite = " 250 g ", Rayon = " Épicerie " }))!;
-        await service.AjouterIngredientAsync(code, new Ingredient { Nom = "Œufs", Quantite = "4", Rayon = "Frais" });
-        await service.AjouterIngredientAsync(code, new Ingredient { Nom = "Sel", Quantite = "  " });
+        var farine = (await service.AjouterIngredientAsync(code, new Ingredient { Nom = " Farine ", Quantite = 250, UniteId = 2, Rayon = " Épicerie " }))!;
+        await service.AjouterIngredientAsync(code, new Ingredient { Nom = "Œufs", Quantite = 4, Rayon = "Frais" });
+        await service.AjouterIngredientAsync(code, new Ingredient { Nom = "Sel", Quantite = 0 });
 
         var recette = (await service.ObtenirAsync(code))!;
         Assert.Equal(["Farine", "Œufs", "Sel"], recette.Ingredients.Select(i => i.Nom));   // ordre de saisie
-        Assert.Equal("250 g", recette.Ingredients[0].Quantite);
+        Assert.Equal((250m, 2), (recette.Ingredients[0].Quantite, recette.Ingredients[0].UniteId));
         Assert.Equal("Épicerie", recette.Ingredients[0].Rayon);
         Assert.Null(recette.Ingredients[2].Quantite);
 
@@ -104,12 +94,13 @@ public sealed class RecetteServiceEfTests : IDisposable
         Assert.Equal([new RecetteResume(crepes, "Crêpes", 2)], resumes);
     }
 
-    [Theory]
-    [InlineData("Farine", "250 g", "Farine (250 g)")]
-    [InlineData("Sel", null, "Sel")]
-    [InlineData("Sel", " ", "Sel")]
-    public void NomPourListe_AjouteLaQuantiteEntreParentheses(string nom, string? quantite, string attendu)
+    [Fact]
+    public void VersArticle_GardeNomQuantiteUniteEtRayon()
     {
-        Assert.Equal(attendu, new Ingredient { Nom = nom, Quantite = quantite }.NomPourListe());
+        var article = new Ingredient { Nom = "Farine", Quantite = 250, UniteId = 2, Rayon = "Épicerie" }.VersArticle();
+        Assert.Equal(("Farine", 250m, 2, "Épicerie"), (article.Nom, article.Quantite, article.UniteId, article.Rayon));
+
+        // Sans quantité : 1 (un article de liste a toujours une quantité).
+        Assert.Equal(1m, new Ingredient { Nom = "Sel" }.VersArticle().Quantite);
     }
 }

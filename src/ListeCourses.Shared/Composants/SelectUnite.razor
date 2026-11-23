@@ -1,0 +1,19 @@
+@* Menu déroulant des unités, utilisable avec @bind-Valeur="article.UniteId".
+   La première ligne, "—", correspond à "pas d'unité" (NULL en base). *@
+
+<select class="unite" aria-label="Unité" value="@Valeur" @onchange="Changer">
+    <option value="">—</option>
+    @foreach (var u in Unites)
+    {
+        <option value="@u.Id">@u.Symbole · @u.Libelle</option>
+    }
+</select>
+
+@code {
+    [Parameter] public int? Valeur { get; set; }
+    [Parameter] public EventCallback<int?> ValeurChanged { get; set; }
+    [Parameter] public IReadOnlyList<Unite> Unites { get; set; } = [];
+
+    private Task Changer(ChangeEventArgs e) =>
+        ValeurChanged.InvokeAsync(int.TryParse(e.Value?.ToString(), out var id) ? id : null);
+}

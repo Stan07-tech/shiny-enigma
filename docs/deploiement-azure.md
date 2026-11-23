@@ -173,6 +173,9 @@ Si l'envoi échoue avec `ConnectionResetError` ou `Connection aborted`, la conne
 service de déploiement, qui était en veille.
 
 Pour une nouvelle version du site, récupérez le code (`git pull`) puis relancez le script.
+Au démarrage, le site met à jour la structure de la base si nécessaire (migrations EF Core) :
+rien à faire dans SSMS. Azure SQL sauvegarde la base automatiquement, et on peut la
+restaurer à un instant passé depuis le portail (« Restaurer ») en cas de problème.
 
 ## 6. Vérifier
 

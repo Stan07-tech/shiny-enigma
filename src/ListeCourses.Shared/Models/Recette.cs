@@ -19,15 +19,16 @@ public class Ingredient
 {
     public int Id { get; set; }
     public string Nom { get; set; } = "";
-    public string? Quantite { get; set; }            // Texte libre : "3", "200 g", "1 c. à soupe"
+    public decimal? Quantite { get; set; }           // 250 (avec l'unité g), 4 (sans unité)
+    public int? UniteId { get; set; }                // FOREIGN KEY vers Unites
     public string? Rayon { get; set; }
 
     [JsonIgnore]
     public int RecetteId { get; set; }
 
-    // Le nom tel qu'il apparaîtra dans une liste de courses : "Farine (200 g)".
-    public string NomPourListe() =>
-        string.IsNullOrWhiteSpace(Quantite) ? Nom : $"{Nom} ({Quantite})";
+    // L'article correspondant dans une liste de courses (même nom, quantité, unité et rayon).
+    public Article VersArticle() =>
+        new() { Nom = Nom, Quantite = Quantite ?? 1, UniteId = UniteId, Rayon = Rayon };
 }
 
 // Ce que les clients voient d'une recette (DTO, comme ListeResume).

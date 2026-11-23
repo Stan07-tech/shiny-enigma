@@ -11,7 +11,6 @@ var builder = WebApplication.CreateBuilder(args);
 // les fournit ensuite automatiquement à qui les demande (API ou composants).
 // Base de données : SQLite en local, SQL Server (Azure SQL) en production,
 // selon le réglage "BaseDeDonnees" (appsettings.json ou paramètres Azure).
-// Les deux DbContext (listes et recettes) utilisent la même base.
 void ConfigurerBase(DbContextOptionsBuilder options)
 {
     var chaine = builder.Configuration.GetConnectionString("Courses");
@@ -22,10 +21,10 @@ void ConfigurerBase(DbContextOptionsBuilder options)
         options.UseSqlite(chaine);
 }
 builder.Services.AddDbContextFactory<CoursesDbContext>(ConfigurerBase);
-builder.Services.AddDbContextFactory<RecettesDbContext>(ConfigurerBase);
 builder.Services.AddSingleton<NotificateurListes>();
 builder.Services.AddSingleton<IListeService, ListeServiceEf>();
 builder.Services.AddSingleton<IRecetteService, RecetteServiceEf>();
+builder.Services.AddSingleton<IUniteService, UniteServiceEf>();
 builder.Services.AddScoped<IListesConnues, ListesConnuesNavigateur>();
 builder.Services.AddScoped<IRecettesConnues, RecettesConnuesNavigateur>();
 builder.Services.AddScoped<IPartage, PartageNavigateur>();
@@ -38,14 +37,15 @@ builder.Services.AddRazorComponents()
 
 var app = builder.Build();
 
-// Crée la base et les tables si elles n'existent pas encore.
+// Prépare la base au démarrage :
+//  - SQL Server (Azure) : applique les migrations (voir Data/MiseANiveauBase.cs) ;
+//  - SQLite (développement, tests) : crée directement les tables d'une base neuve.
 using (var db = app.Services.GetRequiredService<IDbContextFactory<CoursesDbContext>>().CreateDbContext())
 {
-    db.Database.EnsureCreated();
-}
-using (var db = app.Services.GetRequiredService<IDbContextFactory<RecettesDbContext>>().CreateDbContext())
-{
-    db.CreerTablesSiAbsentes();
+    if (db.Database.IsSqlServer())
+        MiseANiveauBase.Appliquer(db);
+    else
+        db.Database.EnsureCreated();
 }
 
 // Chaque modification d'une liste est relayée aux applis mobiles qui la suivent.
@@ -101,6 +101,9 @@ articles.MapDelete("/achetes", async (string code, IListeService service) =>
     await service.SupprimerAchetesAsync(Normaliser(code));
     return Results.NoContent();
 });
+
+// ----- Unités de mesure -----
+app.MapGet("/api/unites", (IUniteService service) => service.ListerAsync());
 
 // ----- API REST des recettes -----
 var recettes = app.MapGroup("/api/recettes");
